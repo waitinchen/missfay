@@ -89,8 +89,9 @@ class PhiBrain:
         self.personality = personality
         self.arousal_level = ArousalLevel.NORMAL
         
-        # 长期记忆文件路径
-        self.memory_path = os.getenv("LONG_TERM_MEMORY_PATH", r"C:\Users\waiti\missfay\k\FAY024.md")
+        # 长期记忆文件路径（优先使用环境变量，否则使用相对路径）
+        default_memory_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "k", "FAY024.md")
+        self.memory_path = os.getenv("LONG_TERM_MEMORY_PATH", default_memory_path)
         self.memory_content = ""
         self._load_memory()
         

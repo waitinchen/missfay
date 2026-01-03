@@ -79,7 +79,7 @@ app.add_middleware(
 
 # 核心配置
 CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY")
-VOICE_ID = "a5a8b420-9360-4145-9c1e-db4ede8e4b15"
+VOICE_ID = os.getenv("CARTESIA_VOICE_ID", "a5a8b420-9360-4145-9c1e-db4ede8e4b15")  # 优先使用环境变量
 MODEL_ID = "sonic-multilingual"
 
 # 验证 CARTESIA_API_KEY
