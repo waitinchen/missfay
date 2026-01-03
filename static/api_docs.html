@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>心菲 (Phi) API 對接文件</title>
+    <style>
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --bg: #f8f9fa;
+            --text: #2d3436;
+            --code-bg: #2d3436;
+            --code-text: #dfe6e9;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text);
+            background-color: var(--bg);
+            margin: 0;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 30px;
+        }
+
+        h1 {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5em;
+            margin: 0;
+        }
+
+        h2 {
+            color: var(--secondary);
+            border-left: 5px solid var(--primary);
+            padding-left: 15px;
+            margin-top: 40px;
+        }
+
+        .endpoint {
+            background: #eef2ff;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f1f3f5;
+        }
+
+        pre {
+            background-color: var(--code-bg);
+            color: var(--code-text);
+            padding: 20px;
+            border-radius: 10px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        .badge-post {
+            background: #4caf50;
+            color: white;
+        }
+
+        .note {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>心菲 (Phi) 語音對話 API 對接文件</h1>
+            <p>Public Version v2.2.0 • 專為極致情感體驗而生</p>
+        </header>
+
+        <section>
+            <h2>1. 概覽</h2>
+            <p>本接口提供心菲的高清語音對話服務。所有音訊均由 Sonic 多語言模型生成，支援極致的情緒化表達與即時生成的物理常識校正。採用黑箱轉發邏輯，資產密鑰嚴格鎖定在伺服器端。</p>
+        </section>
+
+        <section>
+            <h2>2. 請求規格</h2>
+            <div class="endpoint">
+                <span class="badge badge-post">POST</span> /api/v1/phi_voice
+            </div>
+            <p><strong>URL:</strong> <code>http://&lt;your-server-ip&gt;:8000/api/v1/phi_voice</code></p>
+            <p><strong>Headers:</strong> <code>Content-Type: application/json</code></p>
+        </section>
+
+        <section>
+            <h2>3. 請求參數</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>欄位</th>
+                        <th>類型</th>
+                        <th>必填</th>
+                        <th>說明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>user_input</code></td>
+                        <td>string</td>
+                        <td>是</td>
+                        <td>用戶欲傳達給心菲的文字。</td>
+                    </tr>
+                    <tr>
+                        <td><code>session_id</code></td>
+                        <td>string</td>
+                        <td>否</td>
+                        <td>用於維持上下文連貫性的唯一識別碼。默認為 <code>default</code>。</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>範例請求</h3>
+            <pre>{
+    "user_input": "心菲，妳現在想做什麼呢？",
+    "session_id": "主人-房間-001"
+}</pre>
+        </section>
+
+        <section>
+            <h2>4. 回傳說明</h2>
+            <p><strong>成功回傳：</strong> 200 OK，Content-Type 為 <code>audio/mpeg</code> (MP3 串流)。</p>
+            <p><strong>失敗回傳：</strong> 500/400 Error，返回 JSON 格式錯誤代碼。</p>
+            <pre>{ "error": "詳細錯誤訊息" }</pre>
+
+            <div class="note">
+                <strong>💡 技術提示：</strong>
+                回傳的是標準 MP3 二進位流，前端可直接將此 URL 動態賦值給 <code>&lt;audio&gt;</code> 標籤的 <code>src</code> 屬性或使用 Web Audio API
+                進行處理。
+            </div>
+        </section>
+
+        <footer>
+            <p style="text-align: center; color: #999; margin-top: 50px; font-size: 12px;">
+                © 2026 MissFay Project. All rights reserved.
+            </p>
+        </footer>
+    </div>
+</body>
+
+</html>

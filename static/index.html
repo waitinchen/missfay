@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phi 语音对话测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 100px;
+            font-family: inherit;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .arousal-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .arousal-btn {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .arousal-btn:hover {
+            border-color: #667eea;
+            background: #f5f5ff;
+        }
+
+        .arousal-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .generate-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-bottom: 20px;
+        }
+
+        .generate-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .generate-btn:active {
+            transform: translateY(0);
+        }
+
+        .generate-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .audio-player {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f5f5ff;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .audio-player.show {
+            display: block;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            color: #004085;
+        }
+
+        .info strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Phi 语音对话测试</h1>
+        <p class="subtitle">测试 Voice Bridge TTS 功能</p>
+
+        <div class="info">
+            <strong>使用说明：</strong>
+            输入文本，选择兴奋度等级，点击生成语音。系统会调用 Voice Bridge API 生成音频。
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="input-group">
+            <label for="textInput">输入文本：</label>
+            <textarea id="textInput" placeholder="输入要转换为语音的文本，例如：主人...菲终于醒了...这副嗓子...您还满意吗？[laugh]">主人...菲终于醒了...这副嗓子...您还满意吗？[laugh]</textarea>
+        </div>
+
+        <div class="input-group">
+            <label>兴奋度等级：</label>
+            <div class="arousal-selector">
+                <button class="arousal-btn" data-level="0">NORMAL<br>正常</button>
+                <button class="arousal-btn" data-level="1">MILD<br>轻微</button>
+                <button class="arousal-btn active" data-level="2">EXCITED<br>兴奋</button>
+                <button class="arousal-btn" data-level="3">INTENSE<br>强烈</button>
+                <button class="arousal-btn" data-level="4">PEAK<br>峰值</button>
+            </div>
+        </div>
+
+        <button class="generate-btn" id="generateBtn" onclick="generateVoice()">
+            🎵 生成语音
+        </button>
+
+        <div class="audio-player" id="audioPlayer">
+            <strong>生成的音频：</strong>
+            <audio id="audioElement" controls></audio>
+        </div>
+    </div>
+
+    <script>
+        let currentArousalLevel = 2;
+
+        // 兴奋度等级选择
+        document.querySelectorAll('.arousal-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.arousal-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                currentArousalLevel = parseInt(this.dataset.level);
+            });
+        });
+
+        async function generateVoice() {
+            const textInput = document.getElementById('textInput');
+            const generateBtn = document.getElementById('generateBtn');
+            const status = document.getElementById('status');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const audioElement = document.getElementById('audioElement');
+
+            const text = textInput.value.trim();
+            if (!text) {
+                showStatus('请输入文本', 'error');
+                return;
+            }
+
+            // 禁用按钮
+            generateBtn.disabled = true;
+            generateBtn.textContent = '⏳ 生成中...';
+            showStatus('正在生成语音，请稍候...', 'loading');
+            audioPlayer.classList.remove('show');
+
+            try {
+                const response = await fetch('http://localhost:8000/tts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        text_language: 'zh',
+                        arousal_level: currentArousalLevel,
+                        speed: 1.0,
+                        temperature: 0.7
+                    })
+                });
+
+                if (response.ok) {
+                    // 获取音频数据
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    // 设置音频源
+                    audioElement.src = audioUrl;
+                    audioPlayer.classList.add('show');
+                    
+                    // 获取响应头信息
+                    const arousalLevel = response.headers.get('X-Arousal-Level') || 'N/A';
+                    const tags = response.headers.get('X-Sovits-Tags') || 'N/A';
+                    
+                    showStatus(`✅ 语音生成成功！兴奋度: ${arousalLevel}, 标签: ${tags}`, 'success');
+                    
+                    // 自动播放
+                    audioElement.play().catch(e => {
+                        console.log('自动播放被阻止，请手动点击播放');
+                    });
+                } else {
+                    const errorText = await response.text();
+                    showStatus(`❌ 生成失败: ${response.status} - ${errorText}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ 错误: ${error.message}`, 'error');
+                console.error('Error:', error);
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = '🎵 生成语音';
+            }
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status show ${type}`;
+            
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => {
+                    status.classList.remove('show');
+                }, 5000);
+            }
+        }
+
+        // 检查服务状态
+        async function checkService() {
+            try {
+                const response = await fetch('http://localhost:8000/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    showStatus(`✅ 服务已连接: ${data.status || 'healthy'}`, 'success');
+                    setTimeout(() => {
+                        document.getElementById('status').classList.remove('show');
+                    }, 3000);
+                }
+            } catch (error) {
+                showStatus('⚠️ 无法连接到 Voice Bridge 服务，请确保服务已启动', 'error');
+            }
+        }
+
+        // 页面加载时检查服务
+        window.addEventListener('load', checkService);
+
+        // Enter 键生成（Ctrl+Enter）
+        document.getElementById('textInput').addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                generateVoice();
+            }
+        });
+    </script>
+</body>
+</html>
+
+

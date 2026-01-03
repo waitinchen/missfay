@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# Secrets
+.env
+
+# Large Binaries
+*.7z
+*.zip
+*.rar
+*.mp3
+*.wav
+*.png
+*.webp
+
+# Large Model Folders (Optional, but usually excluded in git)
+GPT-SoVITS/
+GPT-SoVITS-v3lora-20250228/
+
+# Logs
+*.txt
+*.log
+api_verify_results.md
+api_verify_report.md
+final_qa_report.md
+qa_pressure_test_report.md
+qa_test_final_report.md
+qa_test_report.md
+system_integration_report.md
+system_ready_report.md

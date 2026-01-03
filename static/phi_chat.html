@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>心菲 - 语音对话</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 800px;
+            height: 98vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            margin: 0 auto;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            /* 为头像绝对定位提供参考 */
+        }
+
+        /* 头像样式 */
+        .chat-avatar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            object-fit: cover;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .chat-header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .chat-header .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant .message-content {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-time {
+            font-size: 11px;
+            opacity: 0.6;
+            margin-top: 4px;
+        }
+
+        .chat-input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .arousal-selector {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .arousal-btn {
+            flex: 1;
+            padding: 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 11px;
+            text-align: center;
+        }
+
+        .arousal-btn:hover {
+            border-color: #667eea;
+            background: #f5f5ff;
+        }
+
+        .arousal-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        textarea {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 14px;
+            resize: none;
+            min-height: 50px;
+            font-family: inherit;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .send-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .send-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .audio-player {
+            margin-top: 8px;
+            padding: 8px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .audio-player.show {
+            display: block;
+        }
+
+        audio {
+            width: 100%;
+            height: 32px;
+        }
+
+        .status {
+            text-align: center;
+            padding: 8px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .typing-indicator.show {
+            display: flex;
+        }
+
+        .thinking-text {
+            font-size: 13px;
+            color: #764ba2;
+            font-weight: 500;
+            font-style: italic;
+            letter-spacing: 0.5px;
+        }
+
+        .pulsate {
+            animation: pulsate 2s infinite ease-in-out;
+        }
+
+        @keyframes pulsate {
+            0% {
+                opacity: 0.6;
+            }
+
+            50% {
+                opacity: 1;
+                transform: scale(1.02);
+            }
+
+            100% {
+                opacity: 0.6;
+            }
+        }
+
+        .typing-dots {
+            display: inline-block;
+        }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #667eea;
+            margin: 0 2px;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+
+            0%,
+            60%,
+            100% {
+                transform: translateY(0);
+                opacity: 0.7;
+            }
+
+            30% {
+                transform: translateY(-10px);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <img src="/static/avatar.png" alt="心菲" class="chat-avatar">
+            <h1>心菲 (Phi)</h1>
+            <div class="subtitle">主人的小寶貝~</div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                <div class="message-content">
+                    <div>主人...心菲正在等您喔~要與我一起玩嗎?</div>
+                    <div class="message-time">刚刚</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-input-area">
+            <div class="status" id="status"></div>
+
+            <!-- 自主情緒指示器 -->
+            <div id="emotionalState"
+                style="text-align: center; margin-bottom: 12px; font-weight: bold; font-size: 13px; color: #764ba2; background: #f0f0ff; padding: 6px; border-radius: 10px; display: none;">
+                💖 心菲目前狀態: <span id="stateName">正常</span>
+            </div>
+
+            <div class="input-container">
+                <textarea id="messageInput" placeholder="输入消息... (Ctrl+Enter 发送)" rows="2"></textarea>
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentArousalLevel = 2; // 初始值，後續由大腦自主切換
+        const API_BASE = 'http://localhost:8000';
+
+        // 移除手動選擇器的事件監聽器 (已刪除相關 HTML)
+
+        // 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            // 添加用户消息
+            addMessage('user', message);
+            input.value = '';
+
+            // 显示输入指示器
+            showTyping();
+
+            try {
+                const startTime = Date.now();
+                // 调用 Unified Chat API 获取大脑回复和语音
+                const response = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: message,
+                        text_language: 'zh',
+                        arousal_level: currentArousalLevel,
+                        speed: 1.0
+                    })
+                });
+
+                const endTime = Date.now();
+                const latency = endTime - startTime;
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // 添加助手回复
+                    addMessage('assistant', data.text, data.audio);
+
+                    // 更新自主情感指示器
+                    const stateIndicator = document.getElementById('emotionalState');
+                    const stateName = document.getElementById('stateName');
+                    stateIndicator.style.display = 'block';
+                    stateName.textContent = data.arousal;
+
+                    // 根據狀態調整顏色
+                    const colors = {
+                        'CALM': '#4a90e2',
+                        'NORMAL': '#764ba2',
+                        'EXCITED': '#f5a623',
+                        'INTENSE': '#d0021b',
+                        'PEAK': '#bd10e0'
+                    };
+                    stateName.style.color = colors[data.arousal] || '#764ba2';
+
+                    // 播放音频
+                    const audio = new Audio(data.audio);
+                    audio.play().catch(e => console.log('自动播放被阻止'));
+                }
+                else {
+                    hideTyping();
+                    const error = await response.text();
+                    addMessage('assistant', `错误: ${response.status} - ${error}`);
+                    showStatus('❌ 生成失败', 'error');
+                }
+            } catch (error) {
+                hideTyping();
+                addMessage('assistant', `错误: ${error.message}`);
+                showStatus(`❌ 错误: ${error.message}`, 'error');
+            }
+        }
+
+        // 添加消息到聊天
+        function addMessage(role, text, audioUrl = null) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+            let audioHtml = '';
+            if (audioUrl) {
+                audioHtml = `
+                    <div class="audio-player show">
+                        <audio controls src="${audioUrl}"></audio>
+                    </div>
+                `;
+            }
+
+            // 尋找當前正在思考的氣泡 (如有)
+            const activeTyping = document.querySelector('.message.assistant.is-thinking');
+
+            if (role === 'assistant' && activeTyping) {
+                // 將思考氣泡轉換為正式回覆
+                const contentDiv = activeTyping.querySelector('.message-content');
+                contentDiv.innerHTML = `
+                    <div>${escapeHtml(text)}</div>
+                    <div class="message-time">${time}</div>
+                    ${audioHtml}
+                `;
+                activeTyping.classList.remove('is-thinking');
+                activeTyping.id = '';
+            } else {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${role}`;
+                messageDiv.innerHTML = `
+                    <div class="message-content">
+                        <div>${escapeHtml(text)}</div>
+                        <div class="message-time">${time}</div>
+                        ${audioHtml}
+                    </div>
+                `;
+                messagesDiv.appendChild(messageDiv);
+            }
+
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // 显示输入指示器
+        function showTyping() {
+            const messagesDiv = document.getElementById('chatMessages');
+
+            // 1. 清理所有殘留的思考標籤 (徹底防鬼影)
+            document.querySelectorAll('.is-thinking').forEach(el => el.remove());
+
+            // 隨機選取思考語句
+            const thoughts = [
+                "心菲正在仔細思考主人的話...",
+                "心菲正在醞釀給主人的驚喜...",
+                "心菲在腦海中尋找著最完美的回答...",
+                "心菲正專心地感受主人的溫暖...",
+                "心菲正在努力組織語言..."
+            ];
+            const randomThought = thoughts[Math.floor(Math.random() * thoughts.length)];
+
+            // 2. 建立全新的思考氣泡並置於最底部
+            const typingDiv = document.createElement('div');
+            typingDiv.id = 'typingIndicator';
+            typingDiv.className = 'message assistant is-thinking';
+            typingDiv.innerHTML = `
+                <div class="message-content">
+                    <div class="typing-indicator show">
+                        <div class="typing-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <div class="thinking-text pulsate">${randomThought}</div>
+                    </div>
+                </div>
+            `;
+            messagesDiv.appendChild(typingDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // 隐藏输入指示器
+        function hideTyping() {
+            document.querySelectorAll('.is-thinking').forEach(el => el.remove());
+        }
+
+        // 显示状态
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status show ${type}`;
+
+            if (type === 'success' || type === 'error') {
+                setTimeout(() => {
+                    status.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // HTML 转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Enter 键发送（Ctrl+Enter）
+        document.getElementById('messageInput').addEventListener('keydown', function (e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // 检查服务状态
+        async function checkService() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.brain_ready) {
+                        showStatus(`✅ 心菲的大腦已就緒 (${data.engine})`, 'success');
+                    } else {
+                        showStatus('⚠️ 心菲的大腦尚未初始化', 'error');
+                    }
+                }
+            } catch (error) {
+                showStatus('⚠️ 服務未啟動', 'error');
+            }
+        }
+
+        // 页面加载时检查服务
+        window.addEventListener('load', checkService);
+    </script>
+</body>
+
+</html>
