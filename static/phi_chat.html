@@ -42,7 +42,63 @@
             padding: 20px;
             text-align: center;
             position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             /* 为头像绝对定位提供参考 */
+        }
+
+        .header-content {
+            flex: 1;
+            text-align: center;
+        }
+
+        .key-health-monitor {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 6px 10px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            z-index: 10;
+        }
+
+        .health-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .health-label {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .health-status {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            min-width: 35px;
+            text-align: center;
+        }
+
+        .health-status.ok {
+            background: rgba(76, 175, 80, 0.9);
+            color: white;
+        }
+
+        .health-status.error {
+            background: rgba(244, 67, 54, 0.9);
+            color: white;
+        }
+
+        .health-status.checking {
+            background: rgba(255, 193, 7, 0.9);
+            color: white;
         }
 
         /* 头像样式 */
@@ -56,6 +112,62 @@
             border: 2px solid rgba(255, 255, 255, 0.8);
             object-fit: cover;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .chat-avatar:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 头像放大预览样式 */
+        .avatar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .avatar-overlay.show {
+            display: flex;
+        }
+
+        .avatar-overlay img {
+            max-width: 80%;
+            max-height: 80%;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: zoomIn 0.3s ease;
+            object-fit: contain;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes zoomIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
 
         .chat-header h1 {
@@ -66,6 +178,59 @@
         .chat-header .subtitle {
             font-size: 14px;
             opacity: 0.9;
+        }
+
+        .header-content {
+            flex: 1;
+            text-align: center;
+        }
+
+        .key-health-monitor {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 6px 10px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            z-index: 10;
+        }
+
+        .health-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .health-label {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .health-status {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            min-width: 35px;
+            text-align: center;
+        }
+
+        .health-status.ok {
+            background: rgba(76, 175, 80, 0.9);
+            color: white;
+        }
+
+        .health-status.error {
+            background: rgba(244, 67, 54, 0.9);
+            color: white;
+        }
+
+        .health-status.checking {
+            background: rgba(255, 193, 7, 0.9);
+            color: white;
         }
 
         .chat-messages {
@@ -327,9 +492,27 @@
 <body>
     <div class="chat-container">
         <div class="chat-header">
-            <img src="/static/avatar.png" alt="心菲" class="chat-avatar">
-            <h1>心菲 (Phi)</h1>
-            <div class="subtitle">主人的小寶貝~</div>
+            <img src="/static/avatar.png" alt="心菲" class="chat-avatar" id="avatarImg" onclick="toggleAvatarPreview()">
+            <div class="header-content">
+                <h1>心菲 (Phi)</h1>
+                <div class="subtitle">主人的小寶貝~</div>
+            </div>
+            <!-- KEY 健康监控（右上方） -->
+            <div id="keyHealthMonitor" class="key-health-monitor">
+                <div class="health-item">
+                    <span class="health-label">LLM:</span>
+                    <span class="health-status" id="llmStatus">检查中...</span>
+                </div>
+                <div class="health-item">
+                    <span class="health-label">TTS:</span>
+                    <span class="health-status" id="ttsStatus">检查中...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 头像放大预览遮罩层 -->
+        <div class="avatar-overlay" id="avatarOverlay" onclick="toggleAvatarPreview()">
+            <img src="/static/avatar.png" alt="心菲">
         </div>
 
         <div class="chat-messages" id="chatMessages">
@@ -342,6 +525,11 @@
         </div>
 
         <div class="chat-input-area">
+            <!-- 实时状态显示（对话框上方） -->
+            <div id="realtimeStatus" style="text-align: center; margin-bottom: 8px; font-size: 12px; padding: 6px; border-radius: 8px; display: none;">
+                <span id="realtimeStatusText"></span>
+            </div>
+            
             <div class="status" id="status"></div>
 
             <!-- 自主情緒指示器 -->
@@ -361,6 +549,12 @@
         let currentArousalLevel = 2; // 初始值，後續由大腦自主切換
         const API_BASE = 'http://localhost:8000';
 
+        // 头像预览切换
+        function toggleAvatarPreview() {
+            const overlay = document.getElementById('avatarOverlay');
+            overlay.classList.toggle('show');
+        }
+
         // 移除手動選擇器的事件監聽器 (已刪除相關 HTML)
 
         // 发送消息
@@ -379,6 +573,10 @@
 
             try {
                 const startTime = Date.now();
+                
+                // 更新实时状态
+                showRealtimeStatus('🧠 心菲正在思考...', 'info');
+                
                 // 调用 Unified Chat API 获取大脑回复和语音
                 const response = await fetch(`${API_BASE}/chat`, {
                     method: 'POST',
@@ -396,40 +594,100 @@
                 const endTime = Date.now();
                 const latency = endTime - startTime;
 
-                if (response.ok) {
-                    const data = await response.json();
-
-                    // 添加助手回复
-                    addMessage('assistant', data.text, data.audio);
-
-                    // 更新自主情感指示器
-                    const stateIndicator = document.getElementById('emotionalState');
-                    const stateName = document.getElementById('stateName');
-                    stateIndicator.style.display = 'block';
-                    stateName.textContent = data.arousal;
-
-                    // 根據狀態調整顏色
-                    const colors = {
-                        'CALM': '#4a90e2',
-                        'NORMAL': '#764ba2',
-                        'EXCITED': '#f5a623',
-                        'INTENSE': '#d0021b',
-                        'PEAK': '#bd10e0'
-                    };
-                    stateName.style.color = colors[data.arousal] || '#764ba2';
-
-                    // 播放音频
-                    const audio = new Audio(data.audio);
-                    audio.play().catch(e => console.log('自动播放被阻止'));
-                }
-                else {
+                // 立即检查响应状态
+                if (!response.ok) {
                     hideTyping();
-                    const error = await response.text();
-                    addMessage('assistant', `错误: ${response.status} - ${error}`);
-                    showStatus('❌ 生成失败', 'error');
+                    hideRealtimeStatus();
+                    
+                    let errorDetail = '';
+                    try {
+                        const errorData = await response.json();
+                        // 优先使用 detail 字段，如果没有则使用 error 字段
+                        if (errorData.detail) {
+                            // 如果是字符串，直接使用；如果是对象，尝试提取有用信息
+                            if (typeof errorData.detail === 'string') {
+                                errorDetail = errorData.detail;
+                            } else {
+                                errorDetail = JSON.stringify(errorData.detail);
+                            }
+                        } else if (errorData.error) {
+                            errorDetail = typeof errorData.error === 'string' ? errorData.error : JSON.stringify(errorData.error);
+                        } else {
+                            errorDetail = `HTTP ${response.status}`;
+                        }
+                    } catch (e) {
+                        // 如果 JSON 解析失败，尝试读取文本
+                        try {
+                            const text = await response.text();
+                            // 清理乱码和无效字符
+                            errorDetail = text.replace(/[^\u0000-\uFFFF]/g, '').substring(0, 200) || `HTTP ${response.status}`;
+                        } catch (e2) {
+                            errorDetail = `HTTP ${response.status}`;
+                        }
+                    }
+                    
+                    // 清理错误消息中的乱码
+                    errorDetail = errorDetail.replace(/[^\u0000-\uFFFF]/g, '').trim();
+                    if (errorDetail.length > 200) {
+                        errorDetail = errorDetail.substring(0, 200) + '...';
+                    }
+                    
+                    // 显示实时错误状态
+                    if (response.status === 401) {
+                        showRealtimeStatus('❌ 认证失败 (401): 请检查 CARTESIA_API_KEY', 'error');
+                        errorDetail = '认证失败：请检查 API Key 是否有效';
+                    } else if (response.status === 429) {
+                        // 429 错误：直接显示友好消息，不解析响应（避免乱码）
+                        showRealtimeStatus('⚠️ 请求过于频繁 (429): 请稍后再试', 'warning');
+                        errorDetail = '主人~菲菲累了，请等 60 秒再找我~';
+                    } else {
+                        showRealtimeStatus(`❌ API 错误 (${response.status})`, 'error');
+                    }
+                    
+                    const errorMessage = `错误: ${response.status} - ${errorDetail}`;
+                    addMessage('assistant', errorMessage);
+                    showStatus(`❌ API 错误 (${response.status})`, 'error');
+                    return;
                 }
+                
+                // 更新实时状态
+                showRealtimeStatus('🎙️ 正在生成语音...', 'info');
+
+                const data = await response.json();
+
+                // 更新实时状态
+                showRealtimeStatus('✅ 回复生成成功', 'success');
+                setTimeout(() => hideRealtimeStatus(), 2000);
+
+                // 添加助手回复
+                addMessage('assistant', data.text, data.audio);
+
+                // 更新自主情感指示器
+                const stateIndicator = document.getElementById('emotionalState');
+                const stateName = document.getElementById('stateName');
+                stateIndicator.style.display = 'block';
+                stateName.textContent = data.arousal;
+
+                // 根據狀態調整顏色
+                const colors = {
+                    'CALM': '#4a90e2',
+                    'NORMAL': '#764ba2',
+                    'EXCITED': '#f5a623',
+                    'INTENSE': '#d0021b',
+                    'PEAK': '#bd10e0'
+                };
+                stateName.style.color = colors[data.arousal] || '#764ba2';
+
+                // 播放音频
+                const audio = new Audio(data.audio);
+                audio.play().catch(e => console.log('自动播放被阻止'));
             } catch (error) {
                 hideTyping();
+                hideRealtimeStatus();
+                
+                // 显示实时错误状态
+                showRealtimeStatus(`❌ 连接错误: ${error.message}`, 'error');
+                
                 addMessage('assistant', `错误: ${error.message}`);
                 showStatus(`❌ 错误: ${error.message}`, 'error');
             }
@@ -540,6 +798,35 @@
             return div.innerHTML;
         }
 
+        // 显示实时状态
+        function showRealtimeStatus(message, type = 'info') {
+            const statusEl = document.getElementById('realtimeStatus');
+            const statusTextEl = document.getElementById('realtimeStatusText');
+            
+            if (!statusEl || !statusTextEl) return;
+            
+            statusTextEl.textContent = message;
+            statusEl.style.display = 'block';
+            
+            // 根据类型设置颜色
+            const colors = {
+                'info': '#2196F3',
+                'success': '#4CAF50',
+                'error': '#F44336',
+                'warning': '#FF9800'
+            };
+            statusEl.style.backgroundColor = colors[type] || colors.info;
+            statusEl.style.color = 'white';
+        }
+
+        // 隐藏实时状态
+        function hideRealtimeStatus() {
+            const statusEl = document.getElementById('realtimeStatus');
+            if (statusEl) {
+                statusEl.style.display = 'none';
+            }
+        }
+
         // Enter 键发送（Ctrl+Enter）
         document.getElementById('messageInput').addEventListener('keydown', function (e) {
             if (e.ctrlKey && e.key === 'Enter') {
@@ -564,8 +851,73 @@
             }
         }
 
+        // KEY 健康监控
+        let healthCheckInterval = null;
+
+        async function checkKeyHealth() {
+            const llmStatusEl = document.getElementById('llmStatus');
+            const ttsStatusEl = document.getElementById('ttsStatus');
+
+            // 设置检查中状态
+            llmStatusEl.textContent = '检查中...';
+            llmStatusEl.className = 'health-status checking';
+            ttsStatusEl.textContent = '检查中...';
+            ttsStatusEl.className = 'health-status checking';
+
+            try {
+                // 检查服务健康状态
+                const response = await fetch(`${API_BASE}/health`);
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // 检查 LLM (Gemini)
+                    if (data.brain_ready && data.brain_status === 'ready') {
+                        llmStatusEl.textContent = 'OK';
+                        llmStatusEl.className = 'health-status ok';
+                    } else {
+                        llmStatusEl.textContent = 'ERROR';
+                        llmStatusEl.className = 'health-status error';
+                    }
+
+                    // 检查 TTS (Cartesia)
+                    if (data.cartesia_status === 'ready') {
+                        ttsStatusEl.textContent = 'OK';
+                        ttsStatusEl.className = 'health-status ok';
+                    } else if (data.cartesia_status === 'unauthorized') {
+                        ttsStatusEl.textContent = '401';
+                        ttsStatusEl.className = 'health-status error';
+                    } else {
+                        ttsStatusEl.textContent = 'ERROR';
+                        ttsStatusEl.className = 'health-status error';
+                    }
+                } else {
+                    llmStatusEl.textContent = 'ERROR';
+                    llmStatusEl.className = 'health-status error';
+                    ttsStatusEl.textContent = 'ERROR';
+                    ttsStatusEl.className = 'health-status error';
+                }
+            } catch (error) {
+                llmStatusEl.textContent = 'ERROR';
+                llmStatusEl.className = 'health-status error';
+                ttsStatusEl.textContent = 'ERROR';
+                ttsStatusEl.className = 'health-status error';
+            }
+        }
+
         // 页面加载时检查服务
-        window.addEventListener('load', checkService);
+        window.addEventListener('load', () => {
+            checkService();
+            checkKeyHealth();
+            // 每 30 秒检查一次健康状态
+            healthCheckInterval = setInterval(checkKeyHealth, 30000);
+        });
+
+        // 页面卸载时清除定时器
+        window.addEventListener('beforeunload', () => {
+            if (healthCheckInterval) {
+                clearInterval(healthCheckInterval);
+            }
+        });
     </script>
 </body>
 

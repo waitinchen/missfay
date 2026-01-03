@@ -8,3 +8,4 @@ print(f"Content length: {len(html_content)} characters")
 print(f"First 100 chars: {html_content[:100]}")
 
 
+

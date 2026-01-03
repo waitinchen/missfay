@@ -38,3 +38,4 @@ else:
         print("  Static directory does not exist!")
 
 
+

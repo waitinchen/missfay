@@ -15,6 +15,7 @@ import logging
 import sys
 from datetime import datetime
 from dotenv import load_dotenv
+import re
 
 # 确保当前目录在路径中
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -23,25 +24,40 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 加载环境变量 (显式指定路径并在内存中修正 BOM)
+# ============================================
+# 强制重新加载 .env 环境变量（修复 401 错误）
+# ============================================
 _base_dir = os.path.dirname(os.path.abspath(__file__))
 _env_path = os.path.join(_base_dir, ".env")
 
+# 强制覆盖旧变量
+load_dotenv(_env_path, override=True)
+
+# 手动加载并处理可能的 BOM（双重保险）
 try:
     with open(_env_path, 'r', encoding='utf-8') as f:
-        # 手动加载并处理可能的 BOM
         env_content = f.read().lstrip('\ufeff')
         for line in env_content.splitlines():
-            if '=' in line and not line.startswith('#'):
+            if '=' in line and not line.startswith('#') and line.strip():
                 k, v = line.split('=', 1)
                 os.environ[k.strip()] = v.strip()
     logger.info("Manually parsed .env to bypass potential BOM issues.")
 except Exception as e:
     logger.error(f"Manual .env parse failed: {e}")
-    load_dotenv(_env_path, override=True)
 
-if not os.getenv("OPENROUTER_API_KEY"):
-    logger.error("CRITICAL: OPENROUTER_API_KEY is still missing!")
+# 调试输出：确认 CARTESIA_API_KEY 是否正确加载
+_cartesia_key = os.getenv("CARTESIA_API_KEY")
+if _cartesia_key:
+    _key_preview = _cartesia_key[:10] + "..." + _cartesia_key[-5:] if len(_cartesia_key) > 15 else _cartesia_key
+    logger.info(f"DEBUG: Cartesia Key loaded: {_key_preview} (length: {len(_cartesia_key)})")
+    print(f"DEBUG: Cartesia Key starts with: {_cartesia_key[:5] if len(_cartesia_key) >= 5 else 'INVALID'}")
+else:
+    logger.error("CRITICAL: CARTESIA_API_KEY not found in environment variables!")
+    print("DEBUG: Cartesia Key starts with: NOT_FOUND")
+
+# 已迁移至 Gemini，不再需要 OPENROUTER_API_KEY
+if not os.getenv("GEMINI_API_KEY"):
+    logger.warning("GEMINI_API_KEY not found, but continuing...")
 
 from phi_brain import PhiBrain, PersonalityMode, ArousalLevel
 
@@ -66,13 +82,21 @@ CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY")
 VOICE_ID = "a5a8b420-9360-4145-9c1e-db4ede8e4b15"
 MODEL_ID = "sonic-multilingual"
 
+# 验证 CARTESIA_API_KEY
+if not CARTESIA_API_KEY:
+    logger.error("CRITICAL: CARTESIA_API_KEY is missing! TTS will fail with 401 error.")
+    raise ValueError("CARTESIA_API_KEY is required. Please check your .env file.")
+else:
+    logger.info(f"Cartesia API Key loaded successfully (length: {len(CARTESIA_API_KEY)})")
+
 # 初始化大脑 (PhiBrain)
 try:
-    if not os.getenv("OPENROUTER_API_KEY"):
-        logger.error("CRITICAL: OPENROUTER_API_KEY is missing!")
+    # 已迁移至 Gemini，检查 GEMINI_API_KEY
+    if not os.getenv("GEMINI_API_KEY"):
+        logger.warning("GEMINI_API_KEY not found, but continuing initialization...")
     
     brain = PhiBrain(
-        api_type="openrouter",
+        api_type="gemini",  # 迁移至 Gemini 2.0 Flash
         personality=PersonalityMode.MIXED
     )
     logger.info("PhiBrain (LLM) initialized successfully.")
@@ -94,16 +118,37 @@ class PhiVoiceRequest(BaseModel):
 
 @app.get("/health")
 async def health_check():
+    """健康检查端点 - 包含 LLM 和 TTS 状态"""
+    brain_status = "ready" if brain is not None else "not_ready"
+    
+    # 检查 Cartesia API Key
+    cartesia_status = "ready" if CARTESIA_API_KEY else "not_ready"
+    
+    # 如果 Key 存在，尝试初始化客户端（不实际调用 API）
+    if CARTESIA_API_KEY:
+        try:
+            from cartesia import Cartesia
+            # 只检查客户端能否初始化，不实际调用 API
+            test_client = Cartesia(api_key=CARTESIA_API_KEY)
+            cartesia_status = "ready"
+        except Exception as e:
+            error_str = str(e)
+            if "401" in error_str or "unauthorized" in error_str.lower():
+                cartesia_status = "unauthorized"
+            else:
+                cartesia_status = "error"
+    
     return {
         "status": "ok",
         "brain_ready": brain is not None,
+        "brain_status": brain_status,
+        "cartesia_status": cartesia_status,
         "engine": "cartesia",
         "timestamp": datetime.now().isoformat()
     }
 
 def _clean_text(text: str) -> str:
     """清理用于 UI 显示的文本 (徹底過濾所有語音控制標籤與英語字母)"""
-    import re
     # 1. 移除所有 [...] 形式的標籤（State, 語音動作等）
     text = re.sub(r'\[.*?\]', '', text)
     
@@ -127,8 +172,6 @@ def _clean_text(text: str) -> str:
 
 def _clean_for_speech(text: str) -> str:
     """針對 TTS 引擎的深度清理（靈魂淨化版）"""
-    import re
-    
     # 1. 徹底移除 [STATE:n]
     text = re.sub(r'\[STATE:\d\]', '', text)
     
@@ -170,6 +213,76 @@ def _clean_for_speech(text: str) -> str:
     
     return text if text else "。"
 
+def _clause_buffer(text: str) -> str:
+    """
+    子句缓冲机制 (Clause Buffering)
+    确保文本是完整的句子，避免破碎的字节流导致循环崩溃
+    
+    特殊处理：保留 Cartesia 支持的语音标签（[gasp], [moan], [laughter] 等），
+    特别是在 PEAK 状态时，这些标签频繁出现，不应被过滤。
+    """
+    # re 模块已在文件顶部导入，无需重复导入
+    
+    # Cartesia 支持的标签白名单（这些标签不应该被移除）
+    cartesia_tags_whitelist = [
+        r'\[laughter\]', r'\[sigh\]', r'\[chuckle\]', r'\[gasp\]',
+        r'\[uh-huh\]', r'\[hmm\]', r'\[wink\]', r'\[giggle\]',
+        r'\[moan\]', r'\[squeal\]'
+    ]
+    
+    # 临时保护 Cartesia 标签：用占位符替换
+    tag_map = {}
+    protected_text = text
+    for idx, pattern in enumerate(cartesia_tags_whitelist):
+        # 查找所有匹配的标签
+        matches = list(re.finditer(pattern, protected_text, re.IGNORECASE))
+        # 从后往前替换，避免位置偏移
+        for match in reversed(matches):
+            placeholder = f"__CARTESIA_TAG_{idx}_{match.start()}__"
+            tag_map[placeholder] = match.group(0)  # 存储原始标签
+            protected_text = protected_text[:match.start()] + placeholder + protected_text[match.end():]
+    
+    # 移除其他标签（STATE 标签、SoVITS 标签等），但保留 Cartesia 标签
+    # 移除 STATE 标签和 SoVITS 标签
+    clean_text = re.sub(r'\[STATE\s*:\s*\d+\]', '', protected_text, flags=re.IGNORECASE)
+    clean_text = re.sub(r'\[speed=[\w.]+\]', '', clean_text)
+    clean_text = re.sub(r'\[pitch=[\w.]+\]', '', clean_text)
+    clean_text = re.sub(r'\[emotion=[\w.]+\]', '', clean_text)
+    clean_text = re.sub(r'<emotion[^>]*>', '', clean_text)
+    clean_text = re.sub(r'<[^>]+>', '', clean_text)  # 移除其他 XML 标签
+    
+    # 按句子分割（句号、问号、感叹号）
+    sentence_endings = r'[。！？.!?]'
+    sentences = re.split(f'({sentence_endings})', clean_text)
+    
+    # 重新组合句子（保留分隔符）
+    complete_sentences = []
+    for i in range(0, len(sentences) - 1, 2):
+        if i + 1 < len(sentences):
+            sentence = sentences[i] + sentences[i + 1]
+            if sentence.strip():
+                complete_sentences.append(sentence.strip())
+    
+    # 恢复 Cartesia 标签的辅助函数
+    def restore_tags(text_with_placeholders):
+        result = text_with_placeholders
+        for placeholder, original_tag in tag_map.items():
+            result = result.replace(placeholder, original_tag)
+        return result
+    
+    # 如果没有句子分隔符，恢复标签后返回原始文本
+    if not complete_sentences:
+        return restore_tags(protected_text).strip()
+    
+    # 确保最后一个句子完整（如果不是以句子结束符结尾，保留原文本）
+    last_sentence = sentences[-1].strip() if sentences else ""
+    if last_sentence and not re.search(sentence_endings, last_sentence):
+        # 如果最后一段不是完整句子，恢复标签后返回原文本
+        return restore_tags(protected_text).strip()
+    
+    # 文本完整，恢复标签并返回
+    return restore_tags(protected_text).strip()
+
 def _pre_process_tags(text: str) -> str:
     """標籤預處理：根據生理邏輯自動修正錯誤描述"""
     # 1. 物理常識校正：小豆豆不可被「插/幹/捅」
@@ -206,23 +319,32 @@ async def phi_voice_proxy(request: PhiVoiceRequest):
             session_id=request.session_id
         )
 
-        # 2. 標籤預處理 (物理校正與標籤自動注入)
-        processed_text = _pre_process_tags(ai_response_text)
+        # 2. 子句缓冲验证（确保文本完整）
+        buffered_text = _clause_buffer(ai_response_text)
+        
+        # 3. 標籤預處理 (物理校正與標籤自動注入)
+        processed_text = _pre_process_tags(buffered_text)
 
-        # 3. 提取情緒標籤
+        # 4. 提取情緒標籤
         cartesia_emotion = None
         emotion_match = re.search(r'<emotion\s+value=["\']([^"\']+)["\']\s*/>', processed_text)
         if emotion_match:
             cartesia_emotion = emotion_match.group(1)
 
-        # 4. 語音化清理
+        # 5. 語音化清理
         speech_text = _clean_for_speech(processed_text)
 
-        # 5. 獲取興奮度參數 (Prosody)
+        # 6. 獲取興奮度參數 (Prosody)
         sovits_params = brain.sovits_tags.get(brain.arousal_level, brain.sovits_tags[ArousalLevel.NORMAL])
         
-        # 6. 調用 Cartesia API (二進位串流模式)
+        # 7. 調用 Cartesia API (二進位串流模式，使用完整文本)
         from cartesia import Cartesia
+        
+        # 验证 API Key
+        if not CARTESIA_API_KEY:
+            raise HTTPException(status_code=500, detail="CARTESIA_API_KEY is missing. Please check .env file.")
+        
+        logger.info(f"Initializing Cartesia client with key: {CARTESIA_API_KEY[:10]}...")
         client = Cartesia(api_key=CARTESIA_API_KEY)
         
         tts_args = {
@@ -238,6 +360,8 @@ async def phi_voice_proxy(request: PhiVoiceRequest):
             "generation_config": {
                 "speed": sovits_params.get("speed", 1.0),
                 "pitch": sovits_params.get("pitch", 1.0)
+                # 注意：Cartesia API 可能不支持 repetition_penalty 参数
+                # 重复问题应在文本生成阶段通过 LLM 的 repetition_penalty 解决
             }
         }
         if cartesia_emotion:
@@ -278,14 +402,26 @@ async def unified_chat(request: TTSRequest):
         # brain.arousal_level = ArousalLevel(request.arousal_level)
         
         # generate_response 返回 (reply_text, metadata)
-        ai_response_text, metadata = brain.generate_response(request.text)
+        try:
+            ai_response_text, metadata = brain.generate_response(request.text)
+        except ValueError as brain_error:
+            # 检查是否是 429 错误
+            error_str = str(brain_error)
+            if "429" in error_str or "请求频率过高" in error_str or "菲菲累了" in error_str:
+                # 429 错误：不生成音频，直接返回错误消息
+                raise HTTPException(
+                    status_code=429,
+                    detail="主人~菲菲累了，请等 60 秒再找我~（速率限制）"
+                )
+            else:
+                # 其他错误，继续抛出
+                raise
         
         # 确保 ai_response_text 是字符串
         if not isinstance(ai_response_text, str):
             ai_response_text = str(ai_response_text)
             
         # --- 自主情感解析 ---
-        import re
         state_match = re.search(r'\[STATE\s*:\s*(\d+)\]', ai_response_text, re.IGNORECASE)
         if state_match:
             new_level_val = int(state_match.group(1))
@@ -308,8 +444,11 @@ async def unified_chat(request: TTSRequest):
             cartesia_emotion = emotion_match.group(1)
             logger.info(f"Detected Emotion for API: {cartesia_emotion}")
         
+        # 執行子句缓冲验证
+        buffered_text = _clause_buffer(ai_response_text)
+        
         # 執行深度清理
-        speech_text = _clean_for_speech(ai_response_text)
+        speech_text = _clean_for_speech(buffered_text)
         
         # --- 興奮度參數映射 (Speed/Pitch/Emotion) ---
         # 獲取當前大腦賦予的穩定標籤
@@ -324,7 +463,25 @@ async def unified_chat(request: TTSRequest):
         logger.info(f"AI Thinking Done. UI: {display_text} | Speech: {speech_text}")
 
         from cartesia import Cartesia
-        client = Cartesia(api_key=CARTESIA_API_KEY)
+        
+        # 验证 API Key
+        if not CARTESIA_API_KEY:
+            raise HTTPException(status_code=500, detail="CARTESIA_API_KEY is missing. Please check .env file.")
+        
+        logger.info(f"Initializing Cartesia client with key: {CARTESIA_API_KEY[:10]}...")
+        
+        try:
+            client = Cartesia(api_key=CARTESIA_API_KEY)
+        except Exception as cartesia_init_error:
+            error_msg = str(cartesia_init_error)
+            logger.error(f"Cartesia client initialization failed: {error_msg}")
+            if "401" in error_msg or "unauthorized" in error_msg.lower():
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"Cartesia API 认证失败（401）：API Key 无效或已过期。请检查 .env 文件中的 CARTESIA_API_KEY。错误: {error_msg}"
+                )
+            else:
+                raise HTTPException(status_code=500, detail=f"Cartesia 初始化失败: {error_msg}")
         
         # 構建合成參數
         tts_args = {
@@ -332,14 +489,15 @@ async def unified_chat(request: TTSRequest):
             "transcript": speech_text,
             "voice": {"mode": "id", "id": VOICE_ID},
             "output_format": {
-                "container": "wav",
+                "container": "mp3",  # 使用 MP3 格式以優化流式傳輸速度
                 "sample_rate": 44100,
-                "encoding": "pcm_s16le",
+                "bit_rate": 128000,  # 128kbps 平衡質量和速度
             },
             "language": "zh",
             "generation_config": {
                 "speed": target_speed,
-                "pitch": target_pitch
+                "pitch": target_pitch,
+                "repetition_penalty": 1.15  # 固定重複懲罰，防止循環崩潰
             }
         }
         
@@ -347,23 +505,57 @@ async def unified_chat(request: TTSRequest):
         if cartesia_emotion:
             tts_args["generation_config"]["emotion"] = cartesia_emotion
 
-        audio_iter = client.tts.bytes(**tts_args)
-
-        data = b"".join(audio_iter)
-
+        # 流式傳輸優化：直接返回音訊流，無需等待完整生成
+        # 這樣可以讓聲音的出現與文字生成的節奏同步，打造最絲滑的「即時對話感」
+        try:
+            audio_stream = client.tts.bytes(**tts_args)
+        except Exception as tts_error:
+            error_msg = str(tts_error)
+            logger.error(f"Cartesia TTS API call failed: {error_msg}")
+            if "401" in error_msg or "unauthorized" in error_msg.lower():
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"Cartesia TTS API 认证失败（401）：API Key 无效或已过期。请检查 .env 文件中的 CARTESIA_API_KEY。错误: {error_msg}"
+                )
+            elif "429" in error_msg or "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
+                raise HTTPException(
+                    status_code=429,
+                    detail="Cartesia API 请求过于频繁（429）：已达到速率限制。请稍后再试或检查配额设置。"
+                )
+            else:
+                raise HTTPException(status_code=500, detail=f"Cartesia TTS 调用失败: {error_msg}")
+        
         import base64
-        audio_b64 = base64.b64encode(data).decode('utf-8')
+        
+        # 收集音訊數據（流式處理）
+        try:
+            audio_data = b"".join(audio_stream)
+            audio_b64 = base64.b64encode(audio_data).decode('utf-8')
+        except Exception as audio_error:
+            logger.error(f"Audio data collection failed: {audio_error}")
+            raise HTTPException(status_code=500, detail=f"音频数据处理失败: {audio_error}")
 
         return {
             "text": display_text,         # 用于显示在 UI 上的纯净文字
             "raw_text": ai_response_text, # 保留原始文字（带标签）以供调试
-            "audio": f"data:audio/wav;base64,{audio_b64}",
+            "audio": f"data:audio/mp3;base64,{audio_b64}",  # 使用 MP3 格式
             "arousal": brain.arousal_level.name
         }
 
+    except HTTPException:
+        # 重新抛出 HTTPException（包括 429）
+        raise
     except Exception as e:
         logger.error(f"Chat Pipeline Error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        # 检查是否是 429 相关错误
+        error_str = str(e)
+        if "429" in error_str or "请求频率过高" in error_str or "菲菲累了" in error_str:
+            raise HTTPException(
+                status_code=429,
+                detail="主人~菲菲累了，请等 60 秒再找我~（速率限制）"
+            )
+        else:
+            raise HTTPException(status_code=500, detail=str(e))
 
 # 静态文件
 _base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -375,6 +567,15 @@ async def serve_static(file_path: str):
     if os.path.exists(full_path):
         return FileResponse(full_path)
     raise HTTPException(status_code=404)
+
+@app.get("/favicon.ico")
+async def favicon():
+    """返回 favicon 或 204 No Content"""
+    favicon_path = os.path.join(static_dir, "favicon.ico")
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path)
+    # 如果没有 favicon，返回 204 No Content（避免 404 错误）
+    return Response(status_code=204)
 
 @app.get("/")
 async def root():
