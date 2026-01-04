@@ -170,8 +170,57 @@ def _clean_text(text: str) -> str:
     
     return text.strip()
 
-def _clean_for_speech(text: str) -> str:
-    """針對 TTS 引擎的深度清理（靈魂淨化版）"""
+def _extract_emotion_from_brackets(text: str) -> dict:
+    """
+    从括号内容中提取情绪信息，转化为 Cartesia 情绪参数
+    
+    例如：(咬着下唇，声音娇媚地问) -> {"positivity": "high", "curiosity": "high"}
+    """
+    emotion_map = {
+        # 关键词 -> (positivity, curiosity, stability)
+        "娇媚": ("high", "high", "medium"),
+        "诱惑": ("high", "high", "medium"),
+        "挑逗": ("high", "high", "low"),
+        "害羞": ("medium", "medium", "low"),
+        "脸红": ("medium", "medium", "low"),
+        "紧张": ("medium", "medium", "low"),
+        "兴奋": ("high", "high", "low"),
+        "激动": ("high", "high", "low"),
+        "渴望": ("high", "high", "low"),
+        "喘息": ("high", "medium", "low"),
+        "娇嗔": ("high", "medium", "low"),
+        "呻吟": ("high", "low", "low"),
+        "咬着": ("high", "medium", "low"),
+        "舔": ("high", "medium", "low"),
+        "揉": ("high", "medium", "low"),
+        "吮": ("high", "medium", "low"),
+    }
+    
+    # 提取所有括号内容
+    bracket_pattern = r'\(([^)]+)\)|（([^）]+)）'
+    matches = re.findall(bracket_pattern, text)
+    
+    emotion_params = {}
+    for match in matches:
+        bracket_content = match[0] or match[1]  # 处理中英文括号
+        for keyword, (pos, cur, sta) in emotion_map.items():
+            if keyword in bracket_content:
+                emotion_params["positivity"] = pos
+                emotion_params["curiosity"] = cur
+                emotion_params["stability"] = sta
+                logger.info(f"Extracted emotion from bracket '{bracket_content}': {emotion_params}")
+                break
+    
+    return emotion_params
+
+def _clean_for_speech(text: str) -> tuple[str, dict]:
+    """
+    針對 TTS 引擎的深度清理（靈魂淨化版）
+    返回: (清理后的文本, 从括号中提取的情绪参数字典)
+    """
+    # 0. 先提取括号中的情绪信息（在移除括号前）
+    emotion_from_brackets = _extract_emotion_from_brackets(text)
+    
     # 1. 徹底移除 [STATE:n]
     text = re.sub(r'\[STATE:\d\]', '', text)
     
@@ -191,7 +240,7 @@ def _clean_for_speech(text: str) -> str:
         # 例如：[laughter] -> ㊙️7㊙️
         text = text.replace(f"[{tag}]", f" ㊙️{i}㊙️ ")
 
-    # 4. 移除所有括號內容 (包含內部可能的亂碼)
+    # 4. 移除所有括號內容 (包含內部可能的亂碼) - 不再直接讀出來，而是轉化為情緒參數
     text = re.sub(r'\(.*?\)|（.*?）|\[.*?\]|【.*?】|\{.*?\}', ' ', text)
     
     # 5. 強制英語淨化 (Fail-safe)：移除所有剩餘的英文字母
@@ -211,7 +260,7 @@ def _clean_for_speech(text: str) -> str:
     text = re.sub(r'[^\u0000-\uFFFF]', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
     
-    return text if text else "。"
+    return (text if text else "。", emotion_from_brackets)
 
 def _clause_buffer(text: str) -> str:
     """
@@ -331,11 +380,22 @@ async def phi_voice_proxy(request: PhiVoiceRequest):
         if emotion_match:
             cartesia_emotion = emotion_match.group(1)
 
-        # 5. 語音化清理
-        speech_text = _clean_for_speech(processed_text)
+        # 5. 語音化清理（返回文本和从括号提取的情绪参数）
+        speech_text, emotion_from_brackets = _clean_for_speech(processed_text)
 
         # 6. 獲取興奮度參數 (Prosody)
         sovits_params = brain.sovits_tags.get(brain.arousal_level, brain.sovits_tags[ArousalLevel.NORMAL])
+        
+        # 🎭 动态语速控制：PEAK 状态时降低语速，模拟欲言又止、气喘吁吁的感觉
+        if brain.arousal_level == ArousalLevel.PEAK:
+            # PEAK 状态：语速降低到 0.9，模拟气喘吁吁
+            target_speed = 0.9
+            logger.info(f"PEAK state detected: Speed reduced to 0.9 for breathless effect")
+        else:
+            # 其他状态：使用原有逻辑
+            target_speed = sovits_params.get("speed", 1.0)
+        
+        target_pitch = sovits_params.get("pitch", 1.0)
         
         # 7. 調用 Cartesia API (二進位串流模式，使用完整文本)
         from cartesia import Cartesia
@@ -347,6 +407,43 @@ async def phi_voice_proxy(request: PhiVoiceRequest):
         logger.info(f"Initializing Cartesia client with key: {CARTESIA_API_KEY[:10]}...")
         client = Cartesia(api_key=CARTESIA_API_KEY)
         
+        # 🎭 动态语速控制：PEAK 状态时降低语速，模拟欲言又止、气喘吁吁的感觉
+        if brain.arousal_level == ArousalLevel.PEAK:
+            # PEAK 状态：语速降低到 0.9，模拟气喘吁吁
+            target_speed = 0.9
+            logger.info(f"PEAK state detected: Speed reduced to 0.9 for breathless effect")
+        else:
+            # 其他状态：使用原有逻辑
+            target_speed = sovits_params.get("speed", 1.0)
+        
+        target_pitch = sovits_params.get("pitch", 1.0)
+        
+        # 🎭 情绪参数调整：根据 arousal_level 设置基础情绪参数
+        base_emotion_config = {
+            ArousalLevel.CALM: {"curiosity": "low", "stability": "high"},
+            ArousalLevel.NORMAL: {"curiosity": "medium", "stability": "medium"},
+            ArousalLevel.EXCITED: {"curiosity": "high", "stability": "medium"},
+            ArousalLevel.INTENSE: {"curiosity": "high", "stability": "low"},
+            ArousalLevel.PEAK: {"curiosity": "high", "stability": "low", "positivity": "high"}
+        }
+        
+        # 合并括号中提取的情绪参数（优先级更高）
+        emotion_config = base_emotion_config.get(brain.arousal_level, {}).copy()
+        if emotion_from_brackets:
+            emotion_config.update(emotion_from_brackets)
+            logger.info(f"Emotion config merged from brackets: {emotion_config}")
+        
+        generation_config = {
+            "speed": target_speed,
+            "pitch": target_pitch,
+            "repetition_penalty": 1.15
+        }
+        
+        # 添加情绪参数
+        if emotion_config:
+            generation_config.update(emotion_config)
+            logger.info(f"Added emotion parameters: {emotion_config}")
+        
         tts_args = {
             "model_id": MODEL_ID,
             "transcript": speech_text,
@@ -357,15 +454,12 @@ async def phi_voice_proxy(request: PhiVoiceRequest):
                 "encoding": "pcm_s16le",
             },
             "language": "zh",
-            "generation_config": {
-                "speed": sovits_params.get("speed", 1.0),
-                "pitch": sovits_params.get("pitch", 1.0)
-                # 注意：Cartesia API 可能不支持 repetition_penalty 参数
-                # 重复问题应在文本生成阶段通过 LLM 的 repetition_penalty 解决
-            }
+            "generation_config": generation_config
         }
+        
         if cartesia_emotion:
             tts_args["generation_config"]["emotion"] = cartesia_emotion
+            logger.info(f"Added explicit emotion tag: {cartesia_emotion}")
 
         # 獲取音訊疊加
         audio_iter = client.tts.bytes(**tts_args)
@@ -447,13 +541,22 @@ async def unified_chat(request: TTSRequest):
         # 執行子句缓冲验证
         buffered_text = _clause_buffer(ai_response_text)
         
-        # 執行深度清理
-        speech_text = _clean_for_speech(buffered_text)
+        # 執行深度清理（返回文本和从括号提取的情绪参数）
+        speech_text, emotion_from_brackets = _clean_for_speech(buffered_text)
         
         # --- 興奮度參數映射 (Speed/Pitch/Emotion) ---
         # 獲取當前大腦賦予的穩定標籤
         sovits_params = brain.sovits_tags.get(brain.arousal_level, brain.sovits_tags[ArousalLevel.NORMAL])
-        target_speed = sovits_params.get("speed", 1.0)
+        
+        # 🎭 动态语速控制：PEAK 状态时降低语速，模拟欲言又止、气喘吁吁的感觉
+        if brain.arousal_level == ArousalLevel.PEAK:
+            # PEAK 状态：语速降低到 0.9，模拟气喘吁吁
+            target_speed = 0.9
+            logger.info(f"PEAK state detected: Speed reduced to 0.9 for breathless effect")
+        else:
+            # 其他状态：使用原有逻辑
+            target_speed = sovits_params.get("speed", 1.0)
+        
         target_pitch = sovits_params.get("pitch", 1.0)
         
         logger.info(f"Cartesia Multi-Param: Speed={target_speed}, Pitch={target_pitch}, Emotion={cartesia_emotion}")
@@ -483,7 +586,33 @@ async def unified_chat(request: TTSRequest):
             else:
                 raise HTTPException(status_code=500, detail=f"Cartesia 初始化失败: {error_msg}")
         
+        # 🎭 情绪参数调整：根据 arousal_level 和括号内容设置基础情绪参数
+        base_emotion_config = {
+            ArousalLevel.CALM: {"curiosity": "low", "stability": "high"},
+            ArousalLevel.NORMAL: {"curiosity": "medium", "stability": "medium"},
+            ArousalLevel.EXCITED: {"curiosity": "high", "stability": "medium"},
+            ArousalLevel.INTENSE: {"curiosity": "high", "stability": "low"},
+            ArousalLevel.PEAK: {"curiosity": "high", "stability": "low", "positivity": "high"}
+        }
+        
+        # 合并括号中提取的情绪参数（优先级更高）
+        emotion_config = base_emotion_config.get(brain.arousal_level, {}).copy()
+        if emotion_from_brackets:
+            emotion_config.update(emotion_from_brackets)
+            logger.info(f"Emotion config merged from brackets: {emotion_config}")
+        
         # 構建合成參數
+        generation_config = {
+            "speed": target_speed,
+            "pitch": target_pitch,
+            "repetition_penalty": 1.15  # 固定重複懲罰，防止循環崩潰
+        }
+        
+        # 添加情绪参数（curiosity, stability, positivity）
+        if emotion_config:
+            generation_config.update(emotion_config)
+            logger.info(f"Added emotion parameters: {emotion_config}")
+        
         tts_args = {
             "model_id": MODEL_ID,
             "transcript": speech_text,
@@ -494,16 +623,13 @@ async def unified_chat(request: TTSRequest):
                 "bit_rate": 128000,  # 128kbps 平衡質量和速度
             },
             "language": "zh",
-            "generation_config": {
-                "speed": target_speed,
-                "pitch": target_pitch,
-                "repetition_penalty": 1.15  # 固定重複懲罰，防止循環崩潰
-            }
+            "generation_config": generation_config
         }
         
-        # 如果有情緒標籤，加入 generation_config
+        # 如果有情緒標籤（<emotion>），加入 generation_config（优先级最高）
         if cartesia_emotion:
             tts_args["generation_config"]["emotion"] = cartesia_emotion
+            logger.info(f"Added explicit emotion tag: {cartesia_emotion}")
 
         # 流式傳輸優化：直接返回音訊流，無需等待完整生成
         # 這樣可以讓聲音的出現與文字生成的節奏同步，打造最絲滑的「即時對話感」

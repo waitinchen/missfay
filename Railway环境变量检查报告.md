@@ -118,3 +118,4 @@ VOICE_ID = "a5a8b420-9360-4145-9c1e-db4ede8e4b15"
 **状态**: ✅ 必需变量已配置，建议添加 `LONG_TERM_MEMORY_PATH`  
 **下一步**: 在 Railway 添加 `LONG_TERM_MEMORY_PATH=k/FAY024.md`
 
+
