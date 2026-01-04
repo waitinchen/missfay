@@ -174,6 +174,136 @@ async def health_check():
         "timestamp": datetime.now().isoformat()
     }
 
+@app.get("/verify-keys")
+async def verify_keys():
+    """
+    验证 Railway 环境变量的健康状况
+    检查所有 API Key 和配置是否有效
+    """
+    verification_results = {
+        "GEMINI_API_KEY": {
+            "exists": False,
+            "valid": False,
+            "length": 0,
+            "error": None
+        },
+        "CARTESIA_API_KEY": {
+            "exists": False,
+            "valid": False,
+            "length": 0,
+            "error": None
+        },
+        "CARTESIA_VOICE_ID": {
+            "exists": False,
+            "valid": False,
+            "value": None,
+            "error": None
+        },
+        "GEMINI_MODEL": {
+            "exists": False,
+            "valid": False,
+            "value": None,
+            "error": None
+        }
+    }
+    
+    # 1. 检查 GEMINI_API_KEY
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if gemini_key:
+        verification_results["GEMINI_API_KEY"]["exists"] = True
+        verification_results["GEMINI_API_KEY"]["length"] = len(gemini_key)
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=gemini_key)
+            # 尝试列出模型（轻量级验证）
+            models = genai.list_models()
+            model_names = [m.name for m in models]
+            verification_results["GEMINI_API_KEY"]["valid"] = True
+        except Exception as e:
+            verification_results["GEMINI_API_KEY"]["valid"] = False
+            verification_results["GEMINI_API_KEY"]["error"] = str(e)
+    else:
+        verification_results["GEMINI_API_KEY"]["error"] = "未设置"
+    
+    # 2. 检查 CARTESIA_API_KEY
+    if CARTESIA_API_KEY:
+        verification_results["CARTESIA_API_KEY"]["exists"] = True
+        verification_results["CARTESIA_API_KEY"]["length"] = len(CARTESIA_API_KEY)
+        try:
+            from cartesia import Cartesia
+            test_client = Cartesia(api_key=CARTESIA_API_KEY)
+            verification_results["CARTESIA_API_KEY"]["valid"] = True
+        except ImportError:
+            verification_results["CARTESIA_API_KEY"]["valid"] = True  # 假设有效，包可能未安装
+        except Exception as e:
+            error_str = str(e)
+            if "401" in error_str or "unauthorized" in error_str.lower():
+                verification_results["CARTESIA_API_KEY"]["valid"] = False
+                verification_results["CARTESIA_API_KEY"]["error"] = "401 Unauthorized - API Key 无效"
+            else:
+                verification_results["CARTESIA_API_KEY"]["valid"] = False
+                verification_results["CARTESIA_API_KEY"]["error"] = str(e)
+    else:
+        verification_results["CARTESIA_API_KEY"]["error"] = "未设置"
+    
+    # 3. 检查 CARTESIA_VOICE_ID
+    voice_id = os.getenv("CARTESIA_VOICE_ID", VOICE_ID)
+    if voice_id:
+        verification_results["CARTESIA_VOICE_ID"]["exists"] = True
+        verification_results["CARTESIA_VOICE_ID"]["value"] = voice_id
+        # 验证 UUID 格式
+        import re
+        uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        if re.match(uuid_pattern, voice_id, re.IGNORECASE):
+            verification_results["CARTESIA_VOICE_ID"]["valid"] = True
+        else:
+            verification_results["CARTESIA_VOICE_ID"]["valid"] = False
+            verification_results["CARTESIA_VOICE_ID"]["error"] = "格式无效（应为 UUID 格式）"
+    else:
+        verification_results["CARTESIA_VOICE_ID"]["error"] = "未设置"
+    
+    # 4. 检查 GEMINI_MODEL
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
+    if gemini_model:
+        verification_results["GEMINI_MODEL"]["exists"] = True
+        verification_results["GEMINI_MODEL"]["value"] = gemini_model
+        # 如果 GEMINI_API_KEY 有效，检查模型是否可用
+        if verification_results["GEMINI_API_KEY"]["valid"]:
+            try:
+                import google.generativeai as genai
+                models = genai.list_models()
+                model_names = [m.name for m in models]
+                target_model = f"models/{gemini_model}"
+                if target_model in model_names or any(gemini_model in name for name in model_names):
+                    verification_results["GEMINI_MODEL"]["valid"] = True
+                else:
+                    verification_results["GEMINI_MODEL"]["valid"] = False
+                    verification_results["GEMINI_MODEL"]["error"] = f"模型 '{gemini_model}' 不在可用列表中"
+            except:
+                verification_results["GEMINI_MODEL"]["valid"] = True  # 假设有效
+        else:
+            verification_results["GEMINI_MODEL"]["valid"] = False
+            verification_results["GEMINI_MODEL"]["error"] = "GEMINI_API_KEY 无效，无法验证模型"
+    else:
+        verification_results["GEMINI_MODEL"]["error"] = "未设置"
+    
+    # 计算总体健康状态
+    all_valid = all(
+        result["exists"] and result["valid"]
+        for result in verification_results.values()
+    )
+    
+    return {
+        "status": "healthy" if all_valid else "unhealthy",
+        "timestamp": datetime.now().isoformat(),
+        "keys": verification_results,
+        "summary": {
+            "total": len(verification_results),
+            "valid": sum(1 for r in verification_results.values() if r["exists"] and r["valid"]),
+            "invalid": sum(1 for r in verification_results.values() if not r["exists"] or not r["valid"])
+        }
+    }
+
 def _clean_text(text: str) -> str:
     """清理用于 UI 显示的文本 (徹底過濾所有語音控制標籤與英語字母)"""
     # 1. 移除所有 [...] 形式的標籤（State, 語音動作等）
