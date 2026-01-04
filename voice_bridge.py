@@ -9,22 +9,20 @@ Voice Bridge - Cartesia API 桥接器 (集成 PhiBrain)
 API_KEY_NAME = "X-API-KEY"
 api_key_header = API_KeyHeader(name=API_KEY_NAME, auto_error=False)
 
-BRIDGE_API_KEY = os.getenv("BRIDGE_API_KEY")
+# 確保輸出目錄存在
+_base_dir = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(_base_dir, "static/output")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 async def get_api_key(api_key: str = Security(api_key_header)):
-    if not BRIDGE_API_KEY:
-        # 如果環境變數未設置，暫時報錯提醒主人
+    bridge_api_key = os.getenv("BRIDGE_API_KEY")
+    if not bridge_api_key:
         logger.error("BRIDGE_API_KEY is not set in environment variables!")
         raise HTTPException(status_code=500, detail="系統未配置 BRIDGE_API_KEY")
         
-    if api_key == BRIDGE_API_KEY:
+    if api_key == bridge_api_key:
         return api_key
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="無效的 API Key，菲菲不跟你說話！")
-
-# 確保輸出目錄存在
-_base_dir = os.path.dirname(os.path.abspath(__file__)) # Define _base_dir earlier for OUTPUT_DIR
-OUTPUT_DIR = os.path.join(_base_dir, "static/output")
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # 音訊清理邏輯
 async def cleanup_audio_file(file_path: str, delay: int = 600):
