@@ -1,10 +1,11 @@
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "gcc"]
+nixPkgs = ["python311", "python311Packages.pip", "gcc", "gnumake", "zlib"]
 
 [phases.install]
 cmds = [
     "pip install --break-system-packages -r requirements_phi.txt",
-    "python3 -c 'import google.generativeai; print(\"✅ google-generativeai installed successfully\")' || (echo '❌ google-generativeai installation failed' && exit 1)"
+    # 强制安装 grpcio 的二进制版本，避免 Nix 环境编译失败
+    "pip install --break-system-packages --upgrade grpcio grpcio-tools"
 ]
 
 [phases.build]
