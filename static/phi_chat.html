@@ -547,7 +547,8 @@
 
     <script>
         let currentArousalLevel = 2; // 初始值，後續由大腦自主切換
-        const API_BASE = 'http://localhost:8000';
+        // 自动检测 API 基础 URL（支持本地和生产环境）
+        const API_BASE = window.location.origin || 'http://localhost:8000';
 
         // 头像预览切换
         function toggleAvatarPreview() {
@@ -871,7 +872,7 @@
                     const data = await response.json();
                     
                     // 检查 LLM (Gemini)
-                    if (data.brain_ready && data.brain_status === 'ready') {
+                    if (data.brain_status === 'ready' || data.brain_ready === true) {
                         llmStatusEl.textContent = 'OK';
                         llmStatusEl.className = 'health-status ok';
                     } else {
