@@ -3,7 +3,10 @@ nixPkgs = ["python311", "python311Packages.pip", "gcc"]
 
 [phases.install]
 cmds = [
-    "pip install --break-system-packages -r requirements_phi.txt"
+    "python3 -m pip install --break-system-packages -r requirements_phi.txt",
+    "python3 -c 'import google.generativeai; print(\"✅ google-generativeai installed successfully\")' || (echo '❌ google-generativeai installation failed' && exit 1)",
+    "python3 -c 'import sys; print(f\"Python path: {sys.executable}\")'",
+    "python3 -c 'import sys; print(f\"Python version: {sys.version}\")'"
 ]
 
 [phases.build]
