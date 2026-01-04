@@ -1042,8 +1042,10 @@ async def missav_bridge(
         raise HTTPException(status_code=500, detail="PhiBrain 大腦未就緒")
 
     try:
-        # 1. 獲取 LLM 回覆
-        ai_response_text, metadata = brain.generate_response(request.message)
+        from fastapi.concurrency import run_in_threadpool
+        
+        # 1. 獲取 LLM 回覆 (使用 threadpool 避免阻塞事件迴圈)
+        ai_response_text, metadata = await run_in_threadpool(brain.generate_response, request.message)
         
         # 2. 獲取 UI 顯示文字
         display_text = _clean_text(ai_response_text)
@@ -1114,12 +1116,14 @@ async def missav_bridge(
         if cartesia_emotion:
             tts_args["generation_config"]["emotion"] = cartesia_emotion
 
-        # 6. 生成語音並寫入文件
-        from cartesia import Cartesia
-        client = Cartesia(api_key=CARTESIA_API_KEY)
-        
-        audio_stream = client.tts.bytes(**tts_args)
-        audio_data = b"".join(audio_stream)
+        # 6. 生成語音並寫入文件 (使用 threadpool)
+        def _generate_audio(args):
+            from cartesia import Cartesia
+            client = Cartesia(api_key=CARTESIA_API_KEY)
+            audio_stream = client.tts.bytes(**args)
+            return b"".join(audio_stream)
+
+        audio_data = await run_in_threadpool(_generate_audio, tts_args)
         
         # 使用 UUID 命名並存儲
         filename = f"phi_{uuid.uuid4().hex}.mp3"
