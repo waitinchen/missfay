@@ -91,8 +91,8 @@ def force_recovery_deps():
             # 最後一招：嘗試系統層級直接安裝 (無視 target)
             os.system(f"{sys.executable} -m pip install --break-system-packages google-generativeai grpcio")
 
-# 執行修復
-force_recovery_deps()
+# 執行修復 (暫時停用以加速生產環境啟動)
+# force_recovery_deps()
 
 import asyncio
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Security, status
