@@ -320,6 +320,12 @@ async def verify_keys():
             "valid": False,
             "value": None,
             "error": None
+        },
+        "BRIDGE_API_KEY": {
+            "exists": False,
+            "valid": False,
+            "length": 0,
+            "error": None
         }
     }
     
@@ -333,7 +339,6 @@ async def verify_keys():
             genai.configure(api_key=gemini_key)
             # 尝试列出模型（轻量级验证）
             models = genai.list_models()
-            model_names = [m.name for m in models]
             verification_results["GEMINI_API_KEY"]["valid"] = True
         except Exception as e:
             verification_results["GEMINI_API_KEY"]["valid"] = False
@@ -350,12 +355,12 @@ async def verify_keys():
             test_client = Cartesia(api_key=CARTESIA_API_KEY)
             verification_results["CARTESIA_API_KEY"]["valid"] = True
         except ImportError:
-            verification_results["CARTESIA_API_KEY"]["valid"] = True  # 假设有效，包可能未安装
+            verification_results["CARTESIA_API_KEY"]["valid"] = True
         except Exception as e:
             error_str = str(e)
             if "401" in error_str or "unauthorized" in error_str.lower():
                 verification_results["CARTESIA_API_KEY"]["valid"] = False
-                verification_results["CARTESIA_API_KEY"]["error"] = "401 Unauthorized - API Key 无效"
+                verification_results["CARTESIA_API_KEY"]["error"] = "401 Unauthorized"
             else:
                 verification_results["CARTESIA_API_KEY"]["valid"] = False
                 verification_results["CARTESIA_API_KEY"]["error"] = str(e)
@@ -367,14 +372,12 @@ async def verify_keys():
     if voice_id:
         verification_results["CARTESIA_VOICE_ID"]["exists"] = True
         verification_results["CARTESIA_VOICE_ID"]["value"] = voice_id
-        # 验证 UUID 格式
-        import re
         uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
         if re.match(uuid_pattern, voice_id, re.IGNORECASE):
             verification_results["CARTESIA_VOICE_ID"]["valid"] = True
         else:
             verification_results["CARTESIA_VOICE_ID"]["valid"] = False
-            verification_results["CARTESIA_VOICE_ID"]["error"] = "格式无效（应为 UUID 格式）"
+            verification_results["CARTESIA_VOICE_ID"]["error"] = "格式无效"
     else:
         verification_results["CARTESIA_VOICE_ID"]["error"] = "未设置"
     
@@ -383,7 +386,6 @@ async def verify_keys():
     if gemini_model:
         verification_results["GEMINI_MODEL"]["exists"] = True
         verification_results["GEMINI_MODEL"]["value"] = gemini_model
-        # 如果 GEMINI_API_KEY 有效，检查模型是否可用
         if verification_results["GEMINI_API_KEY"]["valid"]:
             try:
                 import google.generativeai as genai
@@ -394,18 +396,31 @@ async def verify_keys():
                     verification_results["GEMINI_MODEL"]["valid"] = True
                 else:
                     verification_results["GEMINI_MODEL"]["valid"] = False
-                    verification_results["GEMINI_MODEL"]["error"] = f"模型 '{gemini_model}' 不在可用列表中"
+                    verification_results["GEMINI_MODEL"]["error"] = "未找到模型"
             except:
-                verification_results["GEMINI_MODEL"]["valid"] = True  # 假设有效
+                verification_results["GEMINI_MODEL"]["valid"] = True
         else:
             verification_results["GEMINI_MODEL"]["valid"] = False
             verification_results["GEMINI_MODEL"]["error"] = "GEMINI_API_KEY 无效，无法验证模型"
     else:
         verification_results["GEMINI_MODEL"]["error"] = "未设置"
     
+    # 5. 检查 BRIDGE_API_KEY
+    bridge_api_key = os.getenv("BRIDGE_API_KEY")
+    if bridge_api_key:
+        verification_results["BRIDGE_API_KEY"]["exists"] = True
+        verification_results["BRIDGE_API_KEY"]["length"] = len(bridge_api_key)
+        if len(bridge_api_key) >= 8:
+            verification_results["BRIDGE_API_KEY"]["valid"] = True
+        else:
+            verification_results["BRIDGE_API_KEY"]["valid"] = False
+            verification_results["BRIDGE_API_KEY"]["error"] = "長度不足"
+    else:
+        verification_results["BRIDGE_API_KEY"]["error"] = "未設置"
+    
     # 计算总体健康状态
     all_valid = all(
-        result["exists"] and result["valid"]
+        result.get("exists", False) and result.get("valid", False)
         for result in verification_results.values()
     )
     
@@ -415,8 +430,8 @@ async def verify_keys():
         "keys": verification_results,
         "summary": {
             "total": len(verification_results),
-            "valid": sum(1 for r in verification_results.values() if r["exists"] and r["valid"]),
-            "invalid": sum(1 for r in verification_results.values() if not r["exists"] or not r["valid"])
+            "valid": sum(1 for r in verification_results.values() if r.get("exists", False) and r.get("valid", False)),
+            "invalid": sum(1 for r in verification_results.values() if not r.get("exists", False) or not r.get("valid", False))
         }
     }
 
