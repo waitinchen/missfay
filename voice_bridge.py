@@ -30,20 +30,25 @@ logger = logging.getLogger(__name__)
 _base_dir = os.path.dirname(os.path.abspath(__file__))
 _env_path = os.path.join(_base_dir, ".env")
 
-# 强制覆盖旧变量
-load_dotenv(_env_path, override=True)
-
-# 手动加载并处理可能的 BOM（双重保险）
-try:
-    with open(_env_path, 'r', encoding='utf-8') as f:
-        env_content = f.read().lstrip('\ufeff')
-        for line in env_content.splitlines():
-            if '=' in line and not line.startswith('#') and line.strip():
-                k, v = line.split('=', 1)
-                os.environ[k.strip()] = v.strip()
-    logger.info("Manually parsed .env to bypass potential BOM issues.")
-except Exception as e:
-    logger.error(f"Manual .env parse failed: {e}")
+# 优先从环境变量读取（Railway/生产环境）
+# 如果 .env 文件存在，也尝试加载（本地开发环境）
+if os.path.exists(_env_path):
+    load_dotenv(_env_path, override=True)
+    # 手动加载并处理可能的 BOM（双重保险）
+    try:
+        with open(_env_path, 'r', encoding='utf-8') as f:
+            env_content = f.read().lstrip('\ufeff')
+            for line in env_content.splitlines():
+                if '=' in line and not line.startswith('#') and line.strip():
+                    k, v = line.split('=', 1)
+                    os.environ[k.strip()] = v.strip()
+        logger.info("Manually parsed .env to bypass potential BOM issues.")
+    except Exception as e:
+        logger.warning(f"Manual .env parse failed: {e}")
+else:
+    # Railway/生产环境：直接从系统环境变量读取
+    logger.info("No .env file found, using system environment variables (Railway/production mode)")
+    load_dotenv(override=False)  # 不覆盖已存在的环境变量
 
 # 调试输出：确认 CARTESIA_API_KEY 是否正确加载
 _cartesia_key = os.getenv("CARTESIA_API_KEY")
@@ -90,24 +95,40 @@ else:
     logger.info(f"Cartesia API Key loaded successfully (length: {len(CARTESIA_API_KEY)})")
 
 # 初始化大脑 (PhiBrain)
+brain = None
 try:
     # 已迁移至 Gemini，检查 GEMINI_API_KEY
     gemini_key = os.getenv("GEMINI_API_KEY")
+    
+    # 详细日志：列出所有相关的环境变量
+    logger.info("=== Environment Variables Check ===")
+    logger.info(f"GEMINI_API_KEY exists: {gemini_key is not None}")
+    if gemini_key:
+        logger.info(f"GEMINI_API_KEY length: {len(gemini_key)}")
+        logger.info(f"GEMINI_API_KEY starts with: {gemini_key[:5] if len(gemini_key) >= 5 else 'INVALID'}")
+    else:
+        logger.error("CRITICAL: GEMINI_API_KEY is None or empty!")
+        # 列出所有包含 GEMINI 的环境变量（调试用）
+        gemini_vars = {k: v for k, v in os.environ.items() if 'GEMINI' in k.upper()}
+        logger.info(f"All GEMINI-related env vars: {list(gemini_vars.keys())}")
+    
     if not gemini_key:
-        logger.error("CRITICAL: GEMINI_API_KEY not found! LLM will not work.")
-        raise ValueError("GEMINI_API_KEY is required. Please check your Railway environment variables.")
+        error_msg = "GEMINI_API_KEY is required. Please check your Railway environment variables."
+        logger.error(f"CRITICAL: {error_msg}")
+        raise ValueError(error_msg)
     
     logger.info(f"GEMINI_API_KEY found (length: {len(gemini_key)})")
     brain = PhiBrain(
         api_type="gemini",  # 迁移至 Gemini 2.0 Flash
         personality=PersonalityMode.MIXED
     )
-    logger.info("PhiBrain (LLM) initialized successfully.")
+    logger.info("✅ PhiBrain (LLM) initialized successfully.")
 except Exception as e:
     import traceback
-    logger.error(f"Failed to initialize PhiBrain: {str(e)}")
+    logger.error(f"❌ Failed to initialize PhiBrain: {str(e)}")
     logger.error(traceback.format_exc())
     brain = None
+    logger.error("⚠️  LLM service will not be available. Please check Railway logs for details.")
 
 class TTSRequest(BaseModel):
     text: str = Field(..., description="要合成的文本")
