@@ -4,6 +4,40 @@ Voice Bridge - Cartesia API 桥接器 (集成 PhiBrain)
 """
 
 # ============================================
+# 外交官模組：安全與資源管理邏輯
+# ============================================
+API_KEY_NAME = "X-API-KEY"
+api_key_header = API_KeyHeader(name=API_KEY_NAME, auto_error=False)
+
+BRIDGE_API_KEY = os.getenv("BRIDGE_API_KEY")
+
+async def get_api_key(api_key: str = Security(api_key_header)):
+    if not BRIDGE_API_KEY:
+        # 如果環境變數未設置，暫時報錯提醒主人
+        logger.error("BRIDGE_API_KEY is not set in environment variables!")
+        raise HTTPException(status_code=500, detail="系統未配置 BRIDGE_API_KEY")
+        
+    if api_key == BRIDGE_API_KEY:
+        return api_key
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="無效的 API Key，菲菲不跟你說話！")
+
+# 確保輸出目錄存在
+_base_dir = os.path.dirname(os.path.abspath(__file__)) # Define _base_dir earlier for OUTPUT_DIR
+OUTPUT_DIR = os.path.join(_base_dir, "static/output")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# 音訊清理邏輯
+async def cleanup_audio_file(file_path: str, delay: int = 600):
+    """在延遲時間後刪除音訊文件"""
+    await asyncio.sleep(delay)
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+            logger.info(f"🗑️ Automatically cleaned up audio file: {file_path}")
+        except Exception as e:
+            logger.error(f"Failed to cleanup file {file_path}: {e}")
+
+# ============================================
 # 終極路徑修正與依賴修復（解決生產環境 500 錯誤）
 # ============================================
 import os
@@ -63,7 +97,8 @@ def force_recovery_deps():
 force_recovery_deps()
 
 import asyncio
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Security, status
+from fastapi.security.api_key import API_KeyHeader
 from fastapi.responses import StreamingResponse, Response, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -72,6 +107,8 @@ from typing import Optional, List, Dict, Any
 import json
 import logging
 import sys
+import uuid
+import time
 from datetime import datetime
 from dotenv import load_dotenv
 import re
@@ -202,6 +239,10 @@ class TTSRequest(BaseModel):
 class PhiVoiceRequest(BaseModel):
     user_input: str = Field(..., description="用戶欲傳達給心菲的文字")
     session_id: Optional[str] = Field("default", description="用於維持上下文連貫性的唯一識別碼")
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., description="要傳送給菲菲的訊息")
+    user_id: Optional[str] = Field("MISSAV_USER", description="外部用戶識別碼")
 
 @app.get("/health")
 async def health_check():
@@ -475,7 +516,11 @@ def _clean_for_speech(text: str) -> tuple[str, dict]:
         text = text.replace(f"[{tag}]", f" ㊙️{i}㊙️ ")
 
     # 4. 移除所有括號內容 (包含內部可能的亂碼) - 不再直接讀出來，而是轉化為情緒參數
-    text = re.sub(r'\(.*?\)|（.*?）|\[.*?\]|【.*?】|\{.*?\}', ' ', text)
+    # 使用循環處理嵌套括號，確保徹底清除
+    prev_text = ""
+    while prev_text != text:
+        prev_text = text
+        text = re.sub(r'\(.*?\)|（.*?）|\[.*?\]|【.*?】|\{.*?\}', ' ', text)
     
     # 5. 強制英語淨化 (Fail-safe)：移除所有剩餘的英文字母
     # 這裡會拔掉所有殘留的 English，但不會動到我們的 ㊙️i㊙️
@@ -966,6 +1011,122 @@ async def favicon():
 @app.get("/")
 async def root():
     return FileResponse(os.path.join(static_dir, "phi_chat.html"))
+
+# ============================================
+# 外交官接口 (MISSAV Bridge)
+# ============================================
+@app.post("/api/v1/chat")
+async def missav_bridge(
+    request: ChatRequest, 
+    background_tasks: BackgroundTasks,
+    api_key: str = Security(get_api_key)
+):
+    """
+    專供外部系統（如 MISSAV）調用的精緻封裝接口。
+    同步處理語音生成，並自動安排背景清理任務。
+    """
+    if not brain:
+        raise HTTPException(status_code=500, detail="PhiBrain 大腦未就緒")
+
+    try:
+        # 1. 獲取 LLM 回覆
+        ai_response_text, metadata = brain.generate_response(request.message)
+        
+        # 2. 獲取 UI 顯示文字
+        display_text = _clean_text(ai_response_text)
+        
+        # 3. 語音化清理 (嵌套括號已在內部循環處理)
+        buffered_text = _clause_buffer(ai_response_text)
+        speech_text, emotion_from_brackets = _clean_for_speech(buffered_text)
+        
+        # 4. 從文本提取標籤
+        cartesia_emotion = None
+        emotion_match = re.search(r'<emotion\s+value=["\']([^"\']+)["\']\s*/>', ai_response_text)
+        if emotion_match:
+            cartesia_emotion = emotion_match.group(1)
+
+        # 5. 構建合成參數 (使用主人指定的 0.7/0.8 穩定度)
+        sovits_params = brain.sovits_tags.get(brain.arousal_level, brain.sovits_tags[ArousalLevel.NORMAL])
+        target_speed = 0.9 if brain.arousal_level == ArousalLevel.PEAK else sovits_params.get("speed", 1.0)
+        target_pitch = sovits_params.get("pitch", 1.0)
+        
+        base_emotion_config = {
+            ArousalLevel.CALM: {"curiosity": "low", "stability": "high"},
+            ArousalLevel.NORMAL: {"curiosity": "medium", "stability": "medium"},
+            ArousalLevel.EXCITED: {"curiosity": "high", "stability": "medium"},
+            ArousalLevel.INTENSE: {"curiosity": "high", "stability": "low"},
+            ArousalLevel.PEAK: {"curiosity": "high", "stability": "low", "positivity": "high"}
+        }
+        
+        emotion_config = base_emotion_config.get(brain.arousal_level, {}).copy()
+        if emotion_from_brackets:
+            emotion_config.update(emotion_from_brackets)
+            
+        generation_config = {
+            "speed": target_speed,
+            "pitch": target_pitch,
+            "repetition_penalty": 1.15
+        }
+        if emotion_config:
+            generation_config.update(emotion_config)
+            
+        tts_args = {
+            "model_id": MODEL_ID,
+            "transcript": speech_text,
+            "voice": {
+                "mode": "id", 
+                "id": VOICE_ID,
+                "__experimental_controls": {
+                    "stability": 0.7,
+                    "similarity_boost": 0.8
+                }
+            },
+            "output_format": {
+                "container": "mp3",
+                "sample_rate": 44100,
+                "bit_rate": 128000
+            },
+            "language": "zh",
+            "generation_config": generation_config
+        }
+        
+        if cartesia_emotion:
+            tts_args["generation_config"]["emotion"] = cartesia_emotion
+
+        # 6. 生成語音並寫入文件
+        from cartesia import Cartesia
+        client = Cartesia(api_key=CARTESIA_API_KEY)
+        
+        audio_stream = client.tts.bytes(**tts_args)
+        audio_data = b"".join(audio_stream)
+        
+        # 使用 UUID 命名並存儲
+        filename = f"phi_{uuid.uuid4().hex}.mp3"
+        file_path = os.path.join(OUTPUT_DIR, filename)
+        
+        with open(file_path, "wb") as f:
+            f.write(audio_data)
+            
+        # 註冊背景清理任務 (600 秒後刪除)
+        background_tasks.add_task(cleanup_audio_file, file_path, 600)
+        
+        # 構建外部訪問連結
+        # 這裡假設部署在 Railway，我們需要構建絕對路徑
+        # 如果 request.base_url 存在則更好，否則使用相對或由前端構建
+        # 為了穩定，回傳相對路徑由前端或外部組裝
+        audio_url = f"/static/output/{filename}"
+
+        return {
+            "reply": ai_response_text,    # 完整的大腦回應
+            "text": display_text,         # 淨化後的 UI 展示文字
+            "audio": audio_url,           # 生成的語音連結
+            "phi_status": brain.arousal_level.name,
+            "expires_in": 600             # 提示外部系統該資源有效期
+        }
+
+    except Exception as e:
+        logger.error(f"Bridge API Error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
