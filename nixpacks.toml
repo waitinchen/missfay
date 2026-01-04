@@ -1,17 +1,15 @@
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "gcc", "gnumake", "zlib"]
+nixPkgs = ["python311", "python311Packages.pip", "gcc", "zlib", "stdenv.cc.cc.lib"]
 
 [phases.install]
 cmds = [
+    # 強制安裝並升級核心包，確保路徑正確
+    "pip install --break-system-packages --upgrade pip",
     "pip install --break-system-packages -r requirements_phi.txt",
-    # 强制安装 grpcio 的二进制版本，避免 Nix 环境编译失败
-    "pip install --break-system-packages --upgrade grpcio grpcio-tools"
+    # 這是關鍵：強制在啟動環境中再確認一次依賴
+    "pip install --break-system-packages google-generativeai grpcio"
 ]
 
-[phases.build]
-cmds = []
-
-[start]
-cmd = "PYTHONPATH=$PYTHONPATH:.:/app/.local/lib/python3.11/site-packages:./deps python3 -m uvicorn voice_bridge:app --host 0.0.0.0 --port $PORT"
-
-
+[phases.start]
+# 強制指定 Python 搜索路徑包含所有可能的地方
+cmd = "PYTHONPATH=$PYTHONPATH:/root/.local/lib/python3.11/site-packages python3 -m uvicorn voice_bridge:app --host 0.0.0.0 --port $PORT"
