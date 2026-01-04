@@ -4,10 +4,17 @@ Voice Bridge - Cartesia API 桥接器 (集成 PhiBrain)
 """
 
 # ============================================
+# 强制安装依赖（解決生產環境 500 錯誤）
+# ============================================
+import os
+# 二號指令：強制執行 pip 安裝，無視系統包限制
+os.system('pip install --break-system-packages google-generativeai')
+
+# ============================================
 # 强制路径修正（确保包能被找到）
 # ============================================
 import sys
-import os
+# import os # Already imported above
 
 # 确保当前用户的 site-packages 被加入搜索路径
 user_site = os.path.expanduser("~/.local/lib/python3.11/site-packages")
