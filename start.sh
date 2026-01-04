@@ -1,16 +1,15 @@
 #!/bin/bash
-# Railpack 启动脚本
-# 启动 Voice Bridge 服务
+# Start script for Railway deployment
+# Sets up library paths for google-generativeai
 
-# 设置环境变量
-export PYTHONUNBUFFERED=1
-
-# 检查端口环境变量（Railway/Railpack 会提供 PORT）
-if [ -z "$PORT" ]; then
-    PORT=8000
+# Find gcc lib directory and add to LD_LIBRARY_PATH
+if [ -d "/nix/store" ]; then
+    # Find gcc lib directory in nix store
+    GCC_LIB=$(find /nix/store -name "libstdc++.so.6" 2>/dev/null | head -1 | xargs dirname)
+    if [ -n "$GCC_LIB" ]; then
+        export LD_LIBRARY_PATH="$GCC_LIB:$LD_LIBRARY_PATH"
+    fi
 fi
 
-# 启动 FastAPI 应用
-exec uvicorn voice_bridge:app --host 0.0.0.0 --port $PORT
-
-
+# Start the application
+exec python3 -m uvicorn voice_bridge:app --host 0.0.0.0 --port ${PORT:-8000}
