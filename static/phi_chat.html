@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>心菲 - 语音对话</title>
+    <title>心菲 - 主人的小寶貝!</title>
     <style>
         * {
             margin: 0;
@@ -154,6 +154,7 @@
             from {
                 opacity: 0;
             }
+
             to {
                 opacity: 1;
             }
@@ -164,6 +165,7 @@
                 transform: scale(0.8);
                 opacity: 0;
             }
+
             to {
                 transform: scale(1);
                 opacity: 1;
@@ -526,10 +528,11 @@
 
         <div class="chat-input-area">
             <!-- 实时状态显示（对话框上方） -->
-            <div id="realtimeStatus" style="text-align: center; margin-bottom: 8px; font-size: 12px; padding: 6px; border-radius: 8px; display: none;">
+            <div id="realtimeStatus"
+                style="text-align: center; margin-bottom: 8px; font-size: 12px; padding: 6px; border-radius: 8px; display: none;">
                 <span id="realtimeStatusText"></span>
             </div>
-            
+
             <div class="status" id="status"></div>
 
             <!-- 自主情緒指示器 -->
@@ -574,10 +577,10 @@
 
             try {
                 const startTime = Date.now();
-                
+
                 // 更新实时状态
                 showRealtimeStatus('🧠 心菲正在思考...', 'info');
-                
+
                 // 调用 Unified Chat API 获取大脑回复和语音
                 const response = await fetch(`${API_BASE}/chat`, {
                     method: 'POST',
@@ -599,7 +602,7 @@
                 if (!response.ok) {
                     hideTyping();
                     hideRealtimeStatus();
-                    
+
                     let errorDetail = '';
                     try {
                         const errorData = await response.json();
@@ -626,13 +629,13 @@
                             errorDetail = `HTTP ${response.status}`;
                         }
                     }
-                    
+
                     // 清理错误消息中的乱码
                     errorDetail = errorDetail.replace(/[^\u0000-\uFFFF]/g, '').trim();
                     if (errorDetail.length > 200) {
                         errorDetail = errorDetail.substring(0, 200) + '...';
                     }
-                    
+
                     // 显示实时错误状态
                     if (response.status === 401) {
                         showRealtimeStatus('❌ 认证失败 (401): 请检查 CARTESIA_API_KEY', 'error');
@@ -644,13 +647,13 @@
                     } else {
                         showRealtimeStatus(`❌ API 错误 (${response.status})`, 'error');
                     }
-                    
+
                     const errorMessage = `错误: ${response.status} - ${errorDetail}`;
                     addMessage('assistant', errorMessage);
                     showStatus(`❌ API 错误 (${response.status})`, 'error');
                     return;
                 }
-                
+
                 // 更新实时状态
                 showRealtimeStatus('🎙️ 正在生成语音...', 'info');
 
@@ -685,10 +688,10 @@
             } catch (error) {
                 hideTyping();
                 hideRealtimeStatus();
-                
+
                 // 显示实时错误状态
                 showRealtimeStatus(`❌ 连接错误: ${error.message}`, 'error');
-                
+
                 addMessage('assistant', `错误: ${error.message}`);
                 showStatus(`❌ 错误: ${error.message}`, 'error');
             }
@@ -803,12 +806,12 @@
         function showRealtimeStatus(message, type = 'info') {
             const statusEl = document.getElementById('realtimeStatus');
             const statusTextEl = document.getElementById('realtimeStatusText');
-            
+
             if (!statusEl || !statusTextEl) return;
-            
+
             statusTextEl.textContent = message;
             statusEl.style.display = 'block';
-            
+
             // 根据类型设置颜色
             const colors = {
                 'info': '#2196F3',
@@ -870,7 +873,7 @@
                 const response = await fetch(`${API_BASE}/health`);
                 if (response.ok) {
                     const data = await response.json();
-                    
+
                     // 检查 LLM (Gemini)
                     if (data.brain_status === 'ready' || data.brain_ready === true) {
                         llmStatusEl.textContent = 'OK';

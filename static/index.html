@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phi 语音对话测试</title>
+    <title>心菲 - 主人的小寶貝!</title>
     <style>
         * {
             margin: 0;
@@ -185,6 +186,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>🎤 Phi 语音对话测试</h1>
@@ -199,7 +201,8 @@
 
         <div class="input-group">
             <label for="textInput">输入文本：</label>
-            <textarea id="textInput" placeholder="输入要转换为语音的文本，例如：主人...菲终于醒了...这副嗓子...您还满意吗？[laugh]">主人...菲终于醒了...这副嗓子...您还满意吗？[laugh]</textarea>
+            <textarea id="textInput"
+                placeholder="输入要转换为语音的文本，例如：主人...菲终于醒了...这副嗓子...您还满意吗？[laugh]">主人...菲终于醒了...这副嗓子...您还满意吗？[laugh]</textarea>
         </div>
 
         <div class="input-group">
@@ -228,7 +231,7 @@
 
         // 兴奋度等级选择
         document.querySelectorAll('.arousal-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function () {
                 document.querySelectorAll('.arousal-btn').forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
                 currentArousalLevel = parseInt(this.dataset.level);
@@ -273,17 +276,17 @@
                     // 获取音频数据
                     const audioBlob = await response.blob();
                     const audioUrl = URL.createObjectURL(audioBlob);
-                    
+
                     // 设置音频源
                     audioElement.src = audioUrl;
                     audioPlayer.classList.add('show');
-                    
+
                     // 获取响应头信息
                     const arousalLevel = response.headers.get('X-Arousal-Level') || 'N/A';
                     const tags = response.headers.get('X-Sovits-Tags') || 'N/A';
-                    
+
                     showStatus(`✅ 语音生成成功！兴奋度: ${arousalLevel}, 标签: ${tags}`, 'success');
-                    
+
                     // 自动播放
                     audioElement.play().catch(e => {
                         console.log('自动播放被阻止，请手动点击播放');
@@ -305,7 +308,7 @@
             const status = document.getElementById('status');
             status.textContent = message;
             status.className = `status show ${type}`;
-            
+
             if (type === 'success' || type === 'error') {
                 setTimeout(() => {
                     status.classList.remove('show');
@@ -333,15 +336,12 @@
         window.addEventListener('load', checkService);
 
         // Enter 键生成（Ctrl+Enter）
-        document.getElementById('textInput').addEventListener('keydown', function(e) {
+        document.getElementById('textInput').addEventListener('keydown', function (e) {
             if (e.ctrlKey && e.key === 'Enter') {
                 generateVoice();
             }
         });
     </script>
 </body>
+
 </html>
-
-
-
-
