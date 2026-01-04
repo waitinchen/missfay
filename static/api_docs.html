@@ -4,113 +4,173 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>心菲 (Phi) API 對接文件</title>
+    <title>MissFay Diplomat API | 專業對接文件</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #667eea;
-            --secondary: #764ba2;
-            --bg: #f8f9fa;
-            --text: #2d3436;
-            --code-bg: #2d3436;
-            --code-text: #dfe6e9;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --primary: #ff75c3;
+            --secondary: #ffa647;
+            --accent: #9d50bb;
+            --text-main: #ffffff;
+            --text-dim: #b0b0b0;
+            --code-bg: #1a1a1a;
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            color: var(--text);
-            background-color: var(--bg);
+            font-family: 'Outfit', sans-serif;
+            background: radial-gradient(circle at top right, #2c003e, #000000);
+            color: var(--text-main);
             margin: 0;
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
             padding: 40px 20px;
         }
 
         .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            max-width: 1000px;
+            width: 100%;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 32px;
+            padding: 60px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
         }
 
         header {
             text-align: center;
-            margin-bottom: 50px;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 30px;
+            margin-bottom: 60px;
         }
 
-        h1 {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+        .logo-text {
+            font-size: 3.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            font-size: 2.5em;
-            margin: 0;
+            letter-spacing: -2px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
         }
 
         h2 {
-            color: var(--secondary);
-            border-left: 5px solid var(--primary);
-            padding-left: 15px;
-            margin-top: 40px;
+            font-size: 2rem;
+            margin-top: 50px;
+            margin-bottom: 25px;
+            color: var(--primary);
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 10px;
         }
 
-        .endpoint {
-            background: #eef2ff;
-            padding: 10px 15px;
+        .endpoint-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 30px;
+            border: 1px dashed var(--glass-border);
+        }
+
+        .method {
+            background: #4caf50;
+            padding: 4px 12px;
             border-radius: 8px;
+            font-weight: 700;
+            margin-right: 12px;
+        }
+
+        .path {
             font-family: monospace;
-            font-weight: bold;
-            display: inline-block;
-            margin-bottom: 20px;
+            font-size: 1.2rem;
+            color: var(--secondary);
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
             margin: 20px 0;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            overflow: hidden;
         }
 
         th,
         td {
+            padding: 18px;
             text-align: left;
-            padding: 12px;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid var(--glass-border);
         }
 
         th {
-            background-color: #f1f3f5;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--secondary);
+            font-weight: 600;
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            border-radius: 16px;
+            padding: 25px;
+            position: relative;
+            margin-top: 20px;
+            border: 1px solid #333;
         }
 
         pre {
-            background-color: var(--code-bg);
-            color: var(--code-text);
-            padding: 20px;
-            border-radius: 10px;
+            margin: 0;
+            font-size: 0.95rem;
+            color: #d4d4d4;
             overflow-x: auto;
-            font-size: 14px;
         }
 
-        .badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            text-transform: uppercase;
-            font-weight: bold;
+        .tab-nav {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 10px;
         }
 
-        .badge-post {
-            background: #4caf50;
-            color: white;
+        .tab {
+            cursor: pointer;
+            padding: 6px 14px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            font-size: 0.85rem;
+            transition: 0.3s;
+        }
+
+        .tab.active {
+            background: var(--primary);
+            color: #000;
+            font-weight: 600;
         }
 
         .note {
-            background: #fff3cd;
-            border-left: 5px solid #ffc107;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
+            background: rgba(255, 117, 195, 0.1);
+            border-left: 4px solid var(--primary);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 40px 0;
+        }
+
+        footer {
+            margin-top: 80px;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        ::selection {
+            background: var(--primary);
+            color: #000;
         }
     </style>
 </head>
@@ -118,77 +178,149 @@
 <body>
     <div class="container">
         <header>
-            <h1>心菲 (Phi) 語音對話 API 對接文件</h1>
-            <p>Public Version v2.2.0 • 專為極致情感體驗而生</p>
+            <div class="logo-text">Diplomat API</div>
+            <div class="subtitle">MissFay Bridge Module v2.5.0</div>
         </header>
 
         <section>
-            <h2>1. 概覽</h2>
-            <p>本接口提供心菲的高清語音對話服務。所有音訊均由 Sonic 多語言模型生成，支援極致的情緒化表達與即時生成的物理常識校正。採用黑箱轉發邏輯，資產密鑰嚴格鎖定在伺服器端。</p>
-        </section>
+            <h2>核心接口說明</h2>
+            <p>本接口專為內部與合作系統對接設計，提供穩定、加密且高效的文字轉語音（TTS）與 AI 對話服務。</p>
 
-        <section>
-            <h2>2. 請求規格</h2>
-            <div class="endpoint">
-                <span class="badge badge-post">POST</span> /api/v1/phi_voice
+            <div class="endpoint-card">
+                <span class="method">POST</span>
+                <span class="path">/api/v1/chat</span>
             </div>
-            <p><strong>URL:</strong> <code>http://&lt;your-server-ip&gt;:8000/api/v1/phi_voice</code></p>
-            <p><strong>Headers:</strong> <code>Content-Type: application/json</code></p>
+
+            <p><strong>基礎網址：</strong> <code>https://missfay.tonetown.ai</code></p>
+            <p><strong>認證方式：</strong> 需在 Header 攜帶 <code>X-API-KEY</code></p>
         </section>
 
         <section>
-            <h2>3. 請求參數</h2>
+            <h2>請求參數 (Request)</h2>
             <table>
                 <thead>
                     <tr>
-                        <th>欄位</th>
+                        <th>參數名</th>
                         <th>類型</th>
                         <th>必填</th>
-                        <th>說明</th>
+                        <th>描述</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td><code>user_input</code></td>
-                        <td>string</td>
+                        <td><code>message</code></td>
+                        <td>String</td>
                         <td>是</td>
-                        <td>用戶欲傳達給心菲的文字。</td>
+                        <td>傳送給心菲的對話文字內容。</td>
                     </tr>
                     <tr>
-                        <td><code>session_id</code></td>
-                        <td>string</td>
+                        <td><code>user_id</code></td>
+                        <td>String</td>
                         <td>否</td>
-                        <td>用於維持上下文連貫性的唯一識別碼。默認為 <code>default</code>。</td>
+                        <td>外部系統的用戶唯一識別碼。</td>
                     </tr>
                 </tbody>
             </table>
-
-            <h3>範例請求</h3>
-            <pre>{
-    "user_input": "心菲，妳現在想做什麼呢？",
-    "session_id": "主人-房間-001"
-}</pre>
         </section>
 
         <section>
-            <h2>4. 回傳說明</h2>
-            <p><strong>成功回傳：</strong> 200 OK，Content-Type 為 <code>audio/mpeg</code> (MP3 串流)。</p>
-            <p><strong>失敗回傳：</strong> 500/400 Error，返回 JSON 格式錯誤代碼。</p>
-            <pre>{ "error": "詳細錯誤訊息" }</pre>
-
-            <div class="note">
-                <strong>💡 技術提示：</strong>
-                回傳的是標準 MP3 二進位流，前端可直接將此 URL 動態賦值給 <code>&lt;audio&gt;</code> 標籤的 <code>src</code> 屬性或使用 Web Audio API
-                進行處理。
+            <h2>整合範例 (Code Example)</h2>
+            <div class="code-block">
+                <div class="tab-nav">
+                    <div class="tab active">JavaScript</div>
+                    <div class="tab">Python</div>
+                    <div class="tab">cURL</div>
+                </div>
+                <pre id="code-display">
+fetch('https://missfay.tonetown.ai/api/v1/chat', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-API-KEY': 'YOUR_BRIDGE_API_KEY'
+    },
+    body: JSON.stringify({
+        message: '心菲，妳今天過得好嗎？',
+        user_id: 'MISSAV_USER_001'
+    })
+})
+.then(res => res.json())
+.then(data => console.log('語音網址:', data.audio));</pre>
             </div>
         </section>
 
+        <section>
+            <h2>響應結構 (Response)</h2>
+            <div class="code-block">
+                <pre>
+{
+    "reply": "（菲菲靠在桌邊，眼裡閃著溫柔的光）當然好呀...看到你就更好了...",
+    "text": "當然好呀...看到你就更好了...",
+    "audio": "https://missfay.tonetown.ai/static/output/phi_xxxx.mp3",
+    "phi_status": {
+        "arousal": 1,
+        "mood": "HAPPY"
+    },
+    "expires_in": 600
+}</pre>
+            </div>
+        </section>
+
+        <div class="note">
+            <strong>⚠️ 安全注意事項：</strong>
+            橋接密鑰應嚴格保存在服務器後端，切勿暴露在前端代碼中。所有生成的音訊文件將在 600 秒（10 分鐘）後自動從存儲伺服器中物理刪除。
+        </div>
+
         <footer>
-            <p style="text-align: center; color: #999; margin-top: 50px; font-size: 12px;">
-                © 2026 MissFay Project. All rights reserved.
-            </p>
+            <p>© 2026 MissFay Project. Powered by Gemini & Cartesia.</p>
         </footer>
     </div>
+
+    <script>
+        const samples = {
+            'JavaScript': `fetch('https://missfay.tonetown.ai/api/v1/chat', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-API-KEY': 'YOUR_BRIDGE_API_KEY'
+    },
+    body: JSON.stringify({
+        message: '心菲，妳今天過得好嗎？',
+        user_id: 'MISSAV_USER_001'
+    })
+})
+.then(res => res.json())
+.then(data => console.log('語音網址:', data.audio));`,
+            'Python': `import requests
+
+url = "https://missfay.tonetown.ai/api/v1/chat"
+headers = {
+    "X-API-KEY": "YOUR_BRIDGE_API_KEY",
+    "Content-Type": "application/json"
+}
+payload = {
+    "message": "心菲，妳在忙嗎？",
+    "user_id": "MISSAV_USER_001"
+}
+
+response = requests.post(url, json=payload, headers=headers)
+print(response.json()["audio"])`,
+            'cURL': `curl -X POST https://missfay.tonetown.ai/api/v1/chat \\
+     -H "Content-Type: application/json" \\
+     -H "X-API-KEY: YOUR_BRIDGE_API_KEY" \\
+     -d '{"message": "主人看妳喔", "user_id": "DEV"}'`
+        };
+
+        const tabs = document.querySelectorAll('.tab');
+        const display = document.getElementById('code-display');
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                display.innerText = samples[tab.innerText];
+            });
+        });
+    </script>
 </body>
 
 </html>

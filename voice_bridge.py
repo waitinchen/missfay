@@ -17,7 +17,7 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Security, status
 from fastapi.security.api_key import APIKeyHeader
-from fastapi.responses import StreamingResponse, Response, FileResponse
+from fastapi.responses import StreamingResponse, Response, FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -237,6 +237,15 @@ class PhiVoiceRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(..., description="要傳送給菲菲的訊息")
     user_id: Optional[str] = Field("MISSAV_USER", description="外部用戶識別碼")
+
+@app.get("/api", response_class=HTMLResponse)
+async def get_api_docs():
+    """返回專業的 API 對接文件頁面"""
+    docs_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static/api_docs.html")
+    if os.path.exists(docs_path):
+        with open(docs_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return HTMLResponse(content="<h1>API Docs Not Found</h1>", status_code=404)
 
 @app.get("/health")
 async def health_check():
