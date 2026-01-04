@@ -1,9 +1,10 @@
 [phases.setup]
-nixPkgs = ["python311Full", "gcc", "zlib", "stdenv.cc.cc.lib"]
+nixPkgs = ["python311", "gcc", "zlib", "stdenv.cc.cc.lib", "curl"]
 
 [phases.install]
 cmds = [
-    # 使用 python311Full 內建的 pip
+    # 終極降維打擊：如果系統沒 pip，我們就自己強行把 pip 塞進去
+    "python3 -m pip --version || (curl -sS https://bootstrap.pypa.io/get-pip.py | python3 -- --break-system-packages)",
     "python3 -m pip install --break-system-packages --upgrade pip",
     "python3 -m pip install --break-system-packages -r requirements_phi.txt",
     "python3 -m pip install --break-system-packages google-generativeai grpcio"
@@ -11,4 +12,4 @@ cmds = [
 
 [phases.start]
 # 強制指定 Python 搜索路徑包含所有可能的地方
-cmd = "PYTHONPATH=$PYTHONPATH:/root/.local/lib/python3.11/site-packages python3 -m uvicorn voice_bridge:app --host 0.0.0.0 --port $PORT"
+cmd = "PYTHONPATH=$PYTHONPATH:/app/.local/lib/python3.11/site-packages:/root/.local/lib/python3.11/site-packages python3 -m uvicorn voice_bridge:app --host 0.0.0.0 --port $PORT"
