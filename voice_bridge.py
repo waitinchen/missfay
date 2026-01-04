@@ -4,60 +4,63 @@ Voice Bridge - Cartesia API 桥接器 (集成 PhiBrain)
 """
 
 # ============================================
-# 强制安装及路径修正（解決生產環境 500 錯誤）
+# 終極路徑修正與依賴修復（解決生產環境 500 錯誤）
 # ============================================
 import os
 import sys
 import subprocess
 import logging
 
-# 配置基础日志以查看启动过程
+# 配置基礎日誌
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def force_install_deps():
-    """强制在运行时安装缺失的依赖并修正路径"""
+def force_recovery_deps():
+    """強制路徑鎖定與依賴恢復邏輯"""
+    # 1. 優先注入所有可能的生產環境包路徑
+    possible_site_packages = [
+        os.path.join(os.getcwd(), "deps"),
+        "/app/.local/lib/python3.11/site-packages",
+        "/root/.local/lib/python3.11/site-packages",
+        os.path.expanduser("~/.local/lib/python3.11/site-packages"),
+    ]
+    
+    for path in possible_site_packages:
+        if os.path.exists(path) and path not in sys.path:
+            logger.info(f"Injecting path: {path}")
+            sys.path.insert(0, path)
+
+    # 2. 嘗試導入依賴
     try:
         import google.generativeai
-        logger.info("✅ google-generativeai already available.")
+        logger.info("✅ google-generativeai is now reachable.")
     except ImportError:
-        logger.warning("⚠️ google-generativeai not found. Executing Emergency Recovery...")
+        logger.warning("⚠️ google-generativeai still missing. Executing Emergency OS-level Install...")
         
-        # 定义本地依赖目录
-        lib_dir = os.path.join(os.getcwd(), "deps")
-        os.makedirs(lib_dir, exist_ok=True)
-        
-        # 强制安装到本地目录
+        # 定義本地補丁目錄
+        patch_dir = os.path.join(os.getcwd(), "deps")
+        os.makedirs(patch_dir, exist_ok=True)
+        if patch_dir not in sys.path:
+            sys.path.insert(0, patch_dir)
+
         try:
-            # 使用 --target 确保安装到我们可以控制且存在的路径
-            cmd = [sys.executable, "-m", "pip", "install", "--break-system-packages", "--target", lib_dir, "google-generativeai", "grpcio", "grpcio-tools"]
-            logger.info(f"Running: {' '.join(cmd)}")
-            subprocess.check_call(cmd)
+            # 使用 --target 強制安裝到我們鎖定的目錄
+            install_cmd = [sys.executable, "-m", "pip", "install", "--break-system-packages", "--target", patch_dir, "google-generativeai", "grpcio"]
+            logger.info(f"Running Install: {' '.join(install_cmd)}")
+            subprocess.check_call(install_cmd)
             
-            # 将该目录加入路径最前端
-            if lib_dir not in sys.path:
-                sys.path.insert(0, lib_dir)
-            
-            # 再次检查
+            # 安裝後清除導包緩存並重新嘗試
+            import importlib
+            importlib.invalidate_caches()
             import google.generativeai
-            logger.info("✅ Emergency Recovery Successful: google-generativeai installed to ./deps")
+            logger.info("✅ Emergency OS-level Install Successful.")
         except Exception as e:
-            logger.error(f"❌ Emergency Recovery Failed: {e}")
+            logger.error(f"❌ Emergency OS-level Install Failed: {e}")
+            # 最後一招：嘗試系統層級直接安裝 (無視 target)
+            os.system(f"{sys.executable} -m pip install --break-system-packages google-generativeai grpcio")
 
-# 立即执行恢复逻辑
-force_install_deps()
-
-# 确保所有可能的 site-packages 路径都被加入
-possible_paths = [
-    os.path.join(os.getcwd(), "deps"),
-    "/root/.local/lib/python3.11/site-packages",
-    "/app/.local/lib/python3.11/site-packages",
-    os.path.expanduser("~/.local/lib/python3.11/site-packages"),
-]
-
-for path in possible_paths:
-    if os.path.exists(path) and path not in sys.path:
-        sys.path.insert(0, path)
+# 執行修復
+force_recovery_deps()
 
 import asyncio
 from fastapi import FastAPI, HTTPException, BackgroundTasks
