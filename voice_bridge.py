@@ -695,10 +695,28 @@ static_dir = os.path.join(_base_dir, "static")
 
 @app.get("/static/{file_path:path}")
 async def serve_static(file_path: str):
+    """静态文件服务 - 支持头像和其他静态资源"""
+    # 安全处理：防止路径遍历攻击
+    file_path = file_path.replace("..", "").lstrip("/")
     full_path = os.path.join(static_dir, file_path)
-    if os.path.exists(full_path):
-        return FileResponse(full_path)
-    raise HTTPException(status_code=404)
+    
+    # 记录调试信息
+    logger.info(f"Serving static file: {file_path} from {full_path}")
+    logger.info(f"Static dir exists: {os.path.exists(static_dir)}, File exists: {os.path.exists(full_path)}")
+    
+    if os.path.exists(full_path) and os.path.isfile(full_path):
+        # 根据文件扩展名设置正确的 Content-Type
+        if file_path.endswith('.png'):
+            return FileResponse(full_path, media_type="image/png")
+        elif file_path.endswith('.jpg') or file_path.endswith('.jpeg'):
+            return FileResponse(full_path, media_type="image/jpeg")
+        elif file_path.endswith('.html'):
+            return FileResponse(full_path, media_type="text/html")
+        else:
+            return FileResponse(full_path)
+    else:
+        logger.warning(f"Static file not found: {full_path}")
+        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
 
 @app.get("/favicon.ico")
 async def favicon():
