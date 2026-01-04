@@ -163,6 +163,16 @@ class PhiBrain:
         
         # Google Gemini 配置
         elif api_type == "gemini":
+            # 动态检查：如果在导入时未成功，在此处利用运行时可能已经注入的路径再次尝试
+            global GEMINI_AVAILABLE, genai
+            if not GEMINI_AVAILABLE:
+                try:
+                    import google.generativeai as genai
+                    GEMINI_AVAILABLE = True
+                    logger.info("✅ Dynamically recovered google-generativeai in constructor.")
+                except ImportError:
+                    pass
+            
             if not GEMINI_AVAILABLE:
                 raise ImportError("google-generativeai 未安装，请运行: pip install google-generativeai")
             

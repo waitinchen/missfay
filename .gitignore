@@ -26,6 +26,8 @@ GPT-SoVITS-v3lora-20250228/
 # Logs
 *.txt
 *.log
+!requirements.txt
+!requirements_phi.txt
 api_verify_results.md
 api_verify_report.md
 final_qa_report.md

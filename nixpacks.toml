@@ -3,14 +3,12 @@ nixPkgs = ["python311", "gcc", "zlib", "stdenv.cc.cc.lib", "curl"]
 
 [phases.install]
 cmds = [
-    # 終極降維打擊：先下載再執行，避免 pipe 語法錯誤
-    "curl -sS https://bootstrap.pypa.io/get-pip.py -o get-pip.py",
-    "python3 get-pip.py --break-system-packages",
-    "python3 -m pip install --break-system-packages --upgrade pip",
-    "python3 -m pip install --break-system-packages -r requirements_phi.txt",
+    # 使用標準 requirements.txt 確保 Railway 在構建階段完成安裝
+    "python3 -m pip install --break-system-packages -r requirements.txt",
+    # 冗餘保險，確保核心包絕對存在
     "python3 -m pip install --break-system-packages google-generativeai grpcio"
 ]
 
 [phases.start]
-# 強制指定 Python 搜索路徑
+# 強制指定所有可能的 Python 搜索路徑
 cmd = "PYTHONPATH=$PYTHONPATH:/app/.local/lib/python3.11/site-packages:/root/.local/lib/python3.11/site-packages python3 -m uvicorn voice_bridge:app --host 0.0.0.0 --port $PORT"
