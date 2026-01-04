@@ -1,9 +1,9 @@
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "gcc", "zlib", "stdenv.cc.cc.lib"]
+nixPkgs = ["python311Full", "gcc", "zlib", "stdenv.cc.cc.lib"]
 
 [phases.install]
 cmds = [
-    # 使用 python3 -m pip 避免路徑找不到問題
+    # 使用 python311Full 內建的 pip
     "python3 -m pip install --break-system-packages --upgrade pip",
     "python3 -m pip install --break-system-packages -r requirements_phi.txt",
     "python3 -m pip install --break-system-packages google-generativeai grpcio"
