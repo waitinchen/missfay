@@ -121,3 +121,4 @@ print("  2. 确认 GEMINI_API_KEY 有效且未超配额")
 print("  3. 检查 voice_bridge.py 是否已更新为使用 Gemini")
 print()
 
+

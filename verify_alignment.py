@@ -251,3 +251,4 @@ if not all_passed:
 print("  3. 重啟 start_voice_bridge.ps1")
 print()
 
+
