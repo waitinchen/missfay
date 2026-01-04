@@ -4,25 +4,52 @@ Voice Bridge - Cartesia API 桥接器 (集成 PhiBrain)
 """
 
 # ============================================
-# 强制安装依赖（解決生產環境 500 錯誤）
+# 强制安装及路径修正（解決生產環境 500 錯誤）
 # ============================================
 import os
-# 二號指令：強制執行 pip 安裝，無視系統包限制
-os.system('pip install --break-system-packages google-generativeai')
-
-# ============================================
-# 强制路径修正（确保包能被找到）
-# ============================================
 import sys
-# import os # Already imported above
+import subprocess
+import logging
 
-# 确保当前用户的 site-packages 被加入搜索路径
-user_site = os.path.expanduser("~/.local/lib/python3.11/site-packages")
-if os.path.exists(user_site) and user_site not in sys.path:
-    sys.path.insert(0, user_site)
+# 配置基础日志以查看启动过程
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# 也检查其他可能的路径
+def force_install_deps():
+    """强制在运行时安装缺失的依赖并修正路径"""
+    try:
+        import google.generativeai
+        logger.info("✅ google-generativeai already available.")
+    except ImportError:
+        logger.warning("⚠️ google-generativeai not found. Executing Emergency Recovery...")
+        
+        # 定义本地依赖目录
+        lib_dir = os.path.join(os.getcwd(), "deps")
+        os.makedirs(lib_dir, exist_ok=True)
+        
+        # 强制安装到本地目录
+        try:
+            # 使用 --target 确保安装到我们可以控制且存在的路径
+            cmd = [sys.executable, "-m", "pip", "install", "--break-system-packages", "--target", lib_dir, "google-generativeai", "grpcio", "grpcio-tools"]
+            logger.info(f"Running: {' '.join(cmd)}")
+            subprocess.check_call(cmd)
+            
+            # 将该目录加入路径最前端
+            if lib_dir not in sys.path:
+                sys.path.insert(0, lib_dir)
+            
+            # 再次检查
+            import google.generativeai
+            logger.info("✅ Emergency Recovery Successful: google-generativeai installed to ./deps")
+        except Exception as e:
+            logger.error(f"❌ Emergency Recovery Failed: {e}")
+
+# 立即执行恢复逻辑
+force_install_deps()
+
+# 确保所有可能的 site-packages 路径都被加入
 possible_paths = [
+    os.path.join(os.getcwd(), "deps"),
     "/root/.local/lib/python3.11/site-packages",
     "/app/.local/lib/python3.11/site-packages",
     os.path.expanduser("~/.local/lib/python3.11/site-packages"),
