@@ -1059,7 +1059,15 @@ async def missav_bridge(
             cartesia_emotion = emotion_match.group(1)
 
         # 5. 構建合成參數 (使用主人指定的 0.7/0.8 穩定度)
-        sovits_params = brain.sovits_tags.get(brain.arousal_level, brain.sovits_tags[ArousalLevel.NORMAL])
+        local_sovits_tags = {
+            ArousalLevel.CALM: {"speed": 0.85, "pitch": 0.95},
+            ArousalLevel.NORMAL: {"speed": 1.0, "pitch": 1.0},
+            ArousalLevel.EXCITED: {"speed": 1.1, "pitch": 1.1},
+            ArousalLevel.INTENSE: {"speed": 1.2, "pitch": 1.15},
+            ArousalLevel.PEAK: {"speed": 1.3, "pitch": 1.2}
+        }
+        
+        sovits_params = local_sovits_tags.get(brain.arousal_level, local_sovits_tags[ArousalLevel.NORMAL])
         target_speed = 0.9 if brain.arousal_level == ArousalLevel.PEAK else sovits_params.get("speed", 1.0)
         target_pitch = sovits_params.get("pitch", 1.0)
         
