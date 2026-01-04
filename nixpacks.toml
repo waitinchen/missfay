@@ -3,13 +3,14 @@ nixPkgs = ["python311", "gcc", "zlib", "stdenv.cc.cc.lib", "curl"]
 
 [phases.install]
 cmds = [
-    # 終極降維打擊：如果系統沒 pip，我們就自己強行把 pip 塞進去
-    "python3 -m pip --version || (curl -sS https://bootstrap.pypa.io/get-pip.py | python3 -- --break-system-packages)",
+    # 終極降維打擊：先下載再執行，避免 pipe 語法錯誤
+    "curl -sS https://bootstrap.pypa.io/get-pip.py -o get-pip.py",
+    "python3 get-pip.py --break-system-packages",
     "python3 -m pip install --break-system-packages --upgrade pip",
     "python3 -m pip install --break-system-packages -r requirements_phi.txt",
     "python3 -m pip install --break-system-packages google-generativeai grpcio"
 ]
 
 [phases.start]
-# 強制指定 Python 搜索路徑包含所有可能的地方
+# 強制指定 Python 搜索路徑
 cmd = "PYTHONPATH=$PYTHONPATH:/app/.local/lib/python3.11/site-packages:/root/.local/lib/python3.11/site-packages python3 -m uvicorn voice_bridge:app --host 0.0.0.0 --port $PORT"
