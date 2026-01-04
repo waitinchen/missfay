@@ -92,9 +92,12 @@ else:
 # 初始化大脑 (PhiBrain)
 try:
     # 已迁移至 Gemini，检查 GEMINI_API_KEY
-    if not os.getenv("GEMINI_API_KEY"):
-        logger.warning("GEMINI_API_KEY not found, but continuing initialization...")
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_key:
+        logger.error("CRITICAL: GEMINI_API_KEY not found! LLM will not work.")
+        raise ValueError("GEMINI_API_KEY is required. Please check your Railway environment variables.")
     
+    logger.info(f"GEMINI_API_KEY found (length: {len(gemini_key)})")
     brain = PhiBrain(
         api_type="gemini",  # 迁移至 Gemini 2.0 Flash
         personality=PersonalityMode.MIXED
