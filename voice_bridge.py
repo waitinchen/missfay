@@ -97,6 +97,7 @@ else:
 
 # 初始化大脑 (PhiBrain)
 brain = None
+brain_init_error = None  # 存储初始化错误信息，用于诊断
 try:
     # 已迁移至 Gemini，检查 GEMINI_API_KEY
     gemini_key = os.getenv("GEMINI_API_KEY")
@@ -116,6 +117,7 @@ try:
     if not gemini_key:
         error_msg = "GEMINI_API_KEY is required. Please check your Railway environment variables."
         logger.error(f"CRITICAL: {error_msg}")
+        brain_init_error = error_msg
         raise ValueError(error_msg)
     
     logger.info(f"GEMINI_API_KEY found (length: {len(gemini_key)})")
@@ -126,9 +128,11 @@ try:
     logger.info("✅ PhiBrain (LLM) initialized successfully.")
 except Exception as e:
     import traceback
+    error_trace = traceback.format_exc()
     logger.error(f"❌ Failed to initialize PhiBrain: {str(e)}")
-    logger.error(traceback.format_exc())
+    logger.error(error_trace)
     brain = None
+    brain_init_error = f"{str(e)}\n\nTraceback:\n{error_trace}"
     logger.error("⚠️  LLM service will not be available. Please check Railway logs for details.")
 
 class TTSRequest(BaseModel):
@@ -646,7 +650,19 @@ async def phi_voice_proxy(request: PhiVoiceRequest):
 @app.post("/chat")
 async def unified_chat(request: TTSRequest):
     if not brain:
-        raise HTTPException(status_code=500, detail="大脑 (LLM) 未就绪，请检查 API Key")
+        # 提供详细的诊断信息
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        error_detail = "大脑 (LLM) 未就绪，请检查 API Key"
+        
+        if not gemini_key:
+            error_detail += "\n\n诊断信息:\n- GEMINI_API_KEY 未在环境变量中找到\n- 请检查 Railway 环境变量设置\n- 确保变量名正确: GEMINI_API_KEY"
+        elif brain_init_error:
+            error_detail += f"\n\n初始化错误:\n{brain_init_error[:500]}"  # 限制长度避免过长
+        else:
+            error_detail += "\n\n诊断信息:\n- GEMINI_API_KEY 存在但初始化失败\n- 请检查 Railway 日志获取详细错误信息"
+        
+        logger.error(f"Chat request failed: {error_detail}")
+        raise HTTPException(status_code=500, detail=error_detail)
 
     try:
         # 1. 大脑思考
