@@ -3,26 +3,34 @@ Voice Bridge - Cartesia API 桥接器 (集成 PhiBrain)
 实现文字流到 Cartesia 高速语音的无缝转换，内置 PhiBrain 逻辑
 """
 
-# ============================================
-# 外交官模組：安全與資源管理邏輯
-# ============================================
-API_KEY_NAME = "X-API-KEY"
-api_key_header = API_KeyHeader(name=API_KEY_NAME, auto_error=False)
+import os
+import sys
+import asyncio
+import subprocess
+import logging
+import uuid
+import time
+import json
+import re
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Security, status
+from fastapi.security.api_key import APIKeyHeader
+from fastapi.responses import StreamingResponse, Response, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+
+# 配置日誌
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # 確保輸出目錄存在
 _base_dir = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(_base_dir, "static/output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-async def get_api_key(api_key: str = Security(api_key_header)):
-    bridge_api_key = os.getenv("BRIDGE_API_KEY")
-    if not bridge_api_key:
-        logger.error("BRIDGE_API_KEY is not set in environment variables!")
-        raise HTTPException(status_code=500, detail="系統未配置 BRIDGE_API_KEY")
-        
-    if api_key == bridge_api_key:
-        return api_key
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="無效的 API Key，菲菲不跟你說話！")
 
 # 音訊清理邏輯
 async def cleanup_audio_file(file_path: str, delay: int = 600):
@@ -38,15 +46,6 @@ async def cleanup_audio_file(file_path: str, delay: int = 600):
 # ============================================
 # 終極路徑修正與依賴修復（解決生產環境 500 錯誤）
 # ============================================
-import os
-import sys
-import subprocess
-import logging
-
-# 配置基礎日誌
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 def force_recovery_deps():
     """強制路徑鎖定與依賴恢復邏輯"""
     # 1. 優先注入所有可能的生產環境包路徑
@@ -91,32 +90,29 @@ def force_recovery_deps():
             # 最後一招：嘗試系統層級直接安裝 (無視 target)
             os.system(f"{sys.executable} -m pip install --break-system-packages google-generativeai grpcio")
 
-# 執行修復 (暫時停用以加速生產環境啟動)
-# force_recovery_deps()
-
-import asyncio
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Security, status
-from fastapi.security.api_key import API_KeyHeader
-from fastapi.responses import StreamingResponse, Response, FileResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-import json
-import logging
-import sys
-import uuid
-import time
-from datetime import datetime
-from dotenv import load_dotenv
-import re
+# 執行修復 (如果環境缺少依賴則自動補全)
+force_recovery_deps()
 
 # 确保当前目录在路径中
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ============================================
+# 外交官模組：安全與資源管理邏輯
+# ============================================
+API_KEY_NAME = "X-API-KEY"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def get_api_key(api_key: str = Security(api_key_header)):
+    bridge_api_key = os.getenv("BRIDGE_API_KEY")
+    if not bridge_api_key:
+        logger.error("BRIDGE_API_KEY is not set in environment variables!")
+        raise HTTPException(status_code=500, detail="系統未配置 BRIDGE_API_KEY")
+        
+    if api_key == bridge_api_key:
+        return api_key
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="無效的 API Key，菲菲不跟你說話！")
 
 # ============================================
 # 强制重新加载 .env 环境变量（修复 401 错误）
