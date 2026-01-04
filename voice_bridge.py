@@ -3,7 +3,28 @@ Voice Bridge - Cartesia API 桥接器 (集成 PhiBrain)
 实现文字流到 Cartesia 高速语音的无缝转换，内置 PhiBrain 逻辑
 """
 
+# ============================================
+# 强制路径修正（确保包能被找到）
+# ============================================
+import sys
 import os
+
+# 确保当前用户的 site-packages 被加入搜索路径
+user_site = os.path.expanduser("~/.local/lib/python3.11/site-packages")
+if os.path.exists(user_site) and user_site not in sys.path:
+    sys.path.insert(0, user_site)
+
+# 也检查其他可能的路径
+possible_paths = [
+    "/root/.local/lib/python3.11/site-packages",
+    "/app/.local/lib/python3.11/site-packages",
+    os.path.expanduser("~/.local/lib/python3.11/site-packages"),
+]
+
+for path in possible_paths:
+    if os.path.exists(path) and path not in sys.path:
+        sys.path.insert(0, path)
+
 import asyncio
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse, Response, FileResponse
