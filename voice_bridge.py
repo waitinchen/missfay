@@ -170,13 +170,27 @@ async def health_check():
             else:
                 cartesia_status = "error"
     
+    # 检查 GEMINI_API_KEY 诊断信息
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    gemini_key_exists = gemini_key is not None and len(gemini_key) > 0
+    
+    # 构建诊断信息
+    diagnostics = {}
+    if not brain:
+        diagnostics["gemini_key_exists"] = gemini_key_exists
+        diagnostics["gemini_key_length"] = len(gemini_key) if gemini_key else 0
+        if brain_init_error:
+            # 只返回错误的前200个字符，避免响应过大
+            diagnostics["init_error"] = brain_init_error[:200] if len(brain_init_error) > 200 else brain_init_error
+    
     return {
         "status": "ok",
         "brain_ready": brain is not None,
         "brain_status": brain_status,
         "cartesia_status": cartesia_status,
         "engine": "cartesia",
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "diagnostics": diagnostics if diagnostics else None
     }
 
 @app.get("/verify-keys")
