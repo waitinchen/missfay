@@ -3,11 +3,10 @@ nixPkgs = ["python311", "python311Packages.pip", "gcc", "zlib", "stdenv.cc.cc.li
 
 [phases.install]
 cmds = [
-    # 強制安裝並升級核心包，確保路徑正確
-    "pip install --break-system-packages --upgrade pip",
-    "pip install --break-system-packages -r requirements_phi.txt",
-    # 這是關鍵：強制在啟動環境中再確認一次依賴
-    "pip install --break-system-packages google-generativeai grpcio"
+    # 使用 python3 -m pip 避免路徑找不到問題
+    "python3 -m pip install --break-system-packages --upgrade pip",
+    "python3 -m pip install --break-system-packages -r requirements_phi.txt",
+    "python3 -m pip install --break-system-packages google-generativeai grpcio"
 ]
 
 [phases.start]
