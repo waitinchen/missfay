@@ -681,7 +681,14 @@ async def phi_voice_proxy(request: PhiVoiceRequest):
         tts_args = {
             "model_id": MODEL_ID,
             "transcript": speech_text,
-            "voice": {"mode": "id", "id": VOICE_ID},
+            "voice": {
+                "mode": "id", 
+                "id": VOICE_ID,
+                "__experimental_controls": {
+                    "stability": 0.7,
+                    "similarity_boost": 0.8
+                }
+            },
             "output_format": {
                 "container": "raw", # 我們直接拿原始數據
                 "sample_rate": 44100,
@@ -862,7 +869,14 @@ async def unified_chat(request: TTSRequest):
         tts_args = {
             "model_id": MODEL_ID,
             "transcript": speech_text,
-            "voice": {"mode": "id", "id": VOICE_ID},
+            "voice": {
+                "mode": "id", 
+                "id": VOICE_ID,
+                "__experimental_controls": {
+                    "stability": 0.7,
+                    "similarity_boost": 0.8
+                }
+            },
             "output_format": {
                 "container": "mp3",  # 使用 MP3 格式以優化流式傳輸速度
                 "sample_rate": 44100,
