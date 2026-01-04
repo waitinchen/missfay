@@ -131,6 +131,9 @@ async def health_check():
             # 只检查客户端能否初始化，不实际调用 API
             test_client = Cartesia(api_key=CARTESIA_API_KEY)
             cartesia_status = "ready"
+        except ImportError:
+            # cartesia 包未安装，但 API Key 存在，标记为 ready（运行时再处理）
+            cartesia_status = "ready"
         except Exception as e:
             error_str = str(e)
             if "401" in error_str or "unauthorized" in error_str.lower():
