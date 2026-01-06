@@ -1,12 +1,6 @@
 ﻿import sys
 import os
 import time
-import io
-
-# Fix encoding for Windows
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-
 sys.path.insert(0, '.')
 
 try:
@@ -34,10 +28,7 @@ reply, metadata = phi.generate_response(test_message, include_tags=True)
 elapsed = time.time() - start_time
 
 print(f"Response time: {elapsed:.2f}s")
-try:
-    print(f"Response: {reply[:200]}...")
-except:
-    print("Response: [Content received]")
+print(f"Response: {reply[:200]}...")
 print()
 
 # Check for filter keywords

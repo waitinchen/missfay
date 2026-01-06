@@ -1,13 +1,7 @@
 ﻿import requests
 import threading
 import time
-import sys
-import io
 from datetime import datetime
-
-# Fix encoding for Windows
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 results = []
 lock = threading.Lock()

@@ -2,12 +2,7 @@
 import wave
 import struct
 import sys
-import io
 from datetime import datetime
-
-# Fix encoding for Windows
-if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 print("Testing voice generation...")
 print()
