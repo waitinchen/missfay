@@ -15,7 +15,7 @@
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            min-height: 100dvh;
             display: flex;
             justify-content: center;
             align-items: flex-start;
@@ -29,7 +29,7 @@
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             width: 100%;
             max-width: 800px;
-            height: 98vh;
+            height: 100dvh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -914,6 +914,17 @@
             checkKeyHealth();
             // 每 30 秒检查一次健康状态
             healthCheckInterval = setInterval(checkKeyHealth, 30000);
+
+            // 處理行動裝置虛擬鍵盤遮擋問題
+            if (window.visualViewport) {
+                const chatContainer = document.querySelector('.chat-container');
+                window.visualViewport.addEventListener('resize', () => {
+                    chatContainer.style.height = `${window.visualViewport.height}px`;
+                    // 滾動到底部以確保看到最新消息
+                    const chatMessages = document.getElementById('chatMessages');
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                });
+            }
         });
 
         // 页面卸载时清除定时器

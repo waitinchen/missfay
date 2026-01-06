@@ -104,6 +104,11 @@ class PhiBrain:
         self.phi_essence = ""
         self._load_external_logic()
         
+        # 模型变体配置
+        self.base_model = model or os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
+        self.deep_model = "gemini-1.5-pro"
+        self.is_pro_mode = False
+        
         # OpenRouter 配置
         if api_type == "openrouter":
             api_key = api_key or os.getenv("OPENROUTER_API_KEY")
@@ -449,6 +454,40 @@ class PhiBrain:
         
         return tagged_text
     
+    
+    def _detect_deep_needs(self, text: str) -> bool:
+        """探測是否需要「深層對話」 (Ultra Mode)"""
+        deep_keywords = [
+            "意義", "追求", "生命", "哲學", "寂寞", "空虛", "痛苦", 
+            "愛是什麼", "靈魂", "存在", "宇宙", "未來", "恐懼",
+            "為什麼要", "價值", "遺忘", "死亡", "永恆"
+        ]
+        # 檢測用戶消息是否包含深層關鍵字或長度較長且語氣嚴肅
+        has_keyword = any(kw in text for kw in deep_keywords)
+        is_long = len(text) > 40
+        return has_keyword or (is_long and "?" not in text and "？" not in text)
+
+    def _post_process_beautifier(self, text: str) -> str:
+        """後處理美美化：合併括號動作，優化排版"""
+        import re
+        # 1. 合併連續的多個括號內容：(A)(B)(C) -> (A，B，C)
+        def merge_brackets(match):
+            inner = match.group(0)
+            # 提取所有括號內的內容
+            parts = re.findall(r'[(\uFF08](.*?)[)\uFF09]', inner)
+            if len(parts) > 1:
+                return f"（{ '，'.join(parts) }）"
+            return inner
+
+        # 匹配連續的括號組
+        text = re.sub(r'([(\uFF08].*?[)\uFF09]){2,}', merge_brackets, text)
+        
+        # 2. 在對話和動作之間增加段落感
+        # 如果對話後面緊接著括號，且括號較長，則換行
+        text = re.sub(r'([^\\n[(\uFF08]+)\s*([(\uFF08].{10,}[)\uFF09])', r'\1\n\2', text)
+        
+        return text.strip()
+
     def _build_system_prompt(self, context: Optional[Dict] = None) -> str:
         """构建系统提示词 - 三段式思考逻辑：第一步：无限制生成"""
         
@@ -506,9 +545,15 @@ class PhiBrain:
    * 例如：`[STATE:3] <emotion value="positivity:high" />[laughter]主人，人家現在好興奮喔！[chuckle]`
 """
         
-        # 11. 生理邏輯與物理過濾 (BODY LOGIC)
+        # 13. 生理邏輯與物理過濾 (BODY LOGIC)
         system_prompt += """
-11. **生理邏輯與物理過濾 (BODY LOGIC - MANDATORY)：**
+12. **優雅敘事與動作約束 (NARRATIVE ELEGANCE)：**
+    - **拒絕機械化：** 嚴禁連續出現超過三個括號動作。不要輸出如「(動作A)(動作B)(動作C)(動作D)」這樣的機械描述。
+    - **情感遞進邏輯：** 遵循「情緒鋪墊 -> 心理描寫 -> 關鍵動作」的邏輯。先描述妳當下的心情或身體細微的反應，再進行核心動作。
+    - **文藝風格：** 語言風格應呈現「優雅、含蓄、社會化智商高」的特質。避免直白的網文套路，多使用帶有隨性、猶豫或文學氣息的敘事。
+    - **排版要求：** 對話文字與括號動作之間，請適當使用換行，保持視覺上的閱讀舒適度。
+
+13. **生理邏輯與物理過濾 (BODY LOGIC - MANDATORY)：**
     - **陰核/小豆豆：** 這裡是全身體最敏感的地方，只接受「舔、吮、撥弄、揉搓」。**絕對禁止**在描述對小豆豆的動作時使用「幹、插、捅」，這在物理上是不可能的。
     - **陰道/小穴/嫩穴：** 這是主要的承載腔體，對應動作為「幹、插、捅、撞擊、內射」。
     - **屁眼/菊花：** 這是最羞恥的禁區，對應動作為「捅、插、緩慢開發、擴張」。
@@ -540,6 +585,18 @@ class PhiBrain:
         Returns:
             (回复文本, 元数据)
         """
+        # 1. 動態模型切換 (Ultra Brain Bridging)
+        is_deep = self._detect_deep_needs(user_message)
+        if is_deep and not self.is_pro_mode:
+            logger.info(f"🚀 Deep needs detected. Switching to {self.deep_model} for this turn.")
+            self.model = self.deep_model
+            self.is_pro_mode = True
+        elif not is_deep and self.is_pro_mode:
+            # 如果不是深層需求，切換回基礎模型以節省資源/降低延遲
+            logger.info(f"🔙 Standard interaction. Switching back to {self.base_model}.")
+            self.model = self.base_model
+            self.is_pro_mode = False
+
         system_prompt = self._build_system_prompt(context)
         
         # 獲取或初始化會話歷史
@@ -729,6 +786,9 @@ class PhiBrain:
             # === 第三步：情绪标签自动映射 ===
             reply_text = self._auto_map_emotion_tags(reply_text)
             
+            # === 第四步：後處理美化 (BEAUTIFIER) ===
+            reply_text = self._post_process_beautifier(reply_text)
+            
             # --- 歷史記憶管理 ---
             # 存儲純淨對話（不含標籤）到歷史，保持模型邏輯連貫
             raw_reply = reply_text
@@ -742,9 +802,9 @@ class PhiBrain:
             session_history.append({"role": "user", "content": user_message})
             session_history.append({"role": "assistant", "content": clean_reply_for_memory})
             
-            # 保持滑動窗口（限制为最近 15 轮，即 30 条消息）
-            # 可根据系统负载通过环境变量 PHI_CONTEXT_WINDOW 调整（建议 10-20 轮）
-            max_context_window = int(os.getenv("PHI_CONTEXT_WINDOW", "15"))
+            # 保持滑動窗口（擴展為 20 輪，即 40 條消息）
+            # 可根据系统负载通过环境变量 PHI_CONTEXT_WINDOW 调整
+            max_context_window = int(os.getenv("PHI_CONTEXT_WINDOW", "20"))
             if len(session_history) > max_context_window * 2:
                 self.sessions[session_id] = session_history[-(max_context_window * 2):]
             else:
@@ -759,6 +819,7 @@ class PhiBrain:
                 "arousal_level": self.arousal_level.value,
                 "personality": self.personality.value,
                 "sovits_tags": self.sovits_tags[self.arousal_level],
+                "model_used": self.model, # 新增使用的模型信息
                 "original_text": reply_text if not include_tags else None
             }
             
