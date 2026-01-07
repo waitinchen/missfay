@@ -825,98 +825,64 @@ async def unified_chat(request: TTSRequest):
 
         logger.info(f"AI Thinking Done. UI: {display_text} | Speech: {speech_text}")
 
-        from cartesia import Cartesia
+        # ElevenLabs Integration
+        from elevenlabs.client import ElevenLabs
         
         # 验证 API Key
-        if not CARTESIA_API_KEY:
-            raise HTTPException(status_code=500, detail="CARTESIA_API_KEY is missing. Please check .env file.")
+        if not ELEVENLABS_API_KEY:
+            raise HTTPException(status_code=500, detail="ELEVENLABS_API_KEY is missing. Please check environment variables.")
         
-        logger.info(f"Initializing Cartesia client with key: {CARTESIA_API_KEY[:10]}...")
+        logger.info(f"Initializing ElevenLabs client...")
         
         try:
-            client = Cartesia(api_key=CARTESIA_API_KEY)
-        except Exception as cartesia_init_error:
-            error_msg = str(cartesia_init_error)
-            logger.error(f"Cartesia client initialization failed: {error_msg}")
-            if "401" in error_msg or "unauthorized" in error_msg.lower():
-                raise HTTPException(
-                    status_code=401,
-                    detail=f"Cartesia API 认证失败（401）：API Key 无效或已过期。请检查 .env 文件中的 CARTESIA_API_KEY。错误: {error_msg}"
-                )
-            else:
-                raise HTTPException(status_code=500, detail=f"Cartesia 初始化失败: {error_msg}")
+            client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+        except Exception as eleven_init_error:
+            error_msg = str(eleven_init_error)
+            logger.error(f"ElevenLabs client initialization failed: {error_msg}")
+            raise HTTPException(status_code=500, detail=f"ElevenLabs 初始化失败: {error_msg}")
         
-        # 🎭 情绪参数调整：根据 arousal_level 和括号内容设置基础情绪参数
-        base_emotion_config = {
-            ArousalLevel.CALM: {"curiosity": "low", "stability": "high"},
-            ArousalLevel.NORMAL: {"curiosity": "medium", "stability": "medium"},
-            ArousalLevel.EXCITED: {"curiosity": "high", "stability": "medium"},
-            ArousalLevel.INTENSE: {"curiosity": "high", "stability": "low"},
-            ArousalLevel.PEAK: {"curiosity": "high", "stability": "low", "positivity": "high"}
+        # 映射 ArousalLevel 到 ElevenLabs 参数
+        eleven_params = {
+            ArousalLevel.CALM: {"stability": 0.85, "similarity_boost": 0.8, "style": 0.0},
+            ArousalLevel.NORMAL: {"stability": 0.7, "similarity_boost": 0.8, "style": 0.0},
+            ArousalLevel.EXCITED: {"stability": 0.5, "similarity_boost": 0.7, "style": 0.25},
+            ArousalLevel.INTENSE: {"stability": 0.4, "similarity_boost": 0.6, "style": 0.5},
+            ArousalLevel.PEAK: {"stability": 0.3, "similarity_boost": 0.5, "style": 0.8}
         }
         
-        # 合并括号中提取的情绪参数（优先级更高）
-        emotion_config = base_emotion_config.get(brain.arousal_level, {}).copy()
+        current_config = eleven_params.get(brain.arousal_level, eleven_params[ArousalLevel.NORMAL])
+        
+        # 如果括号内有明确情绪，进一步微调
         if emotion_from_brackets:
-            emotion_config.update(emotion_from_brackets)
-            logger.info(f"Emotion config merged from brackets: {emotion_config}")
-        
-        # 構建合成參數
-        generation_config = {
-            "speed": target_speed,
-            "pitch": target_pitch,
-            "repetition_penalty": 1.15  # 固定重複懲罰，防止循環崩潰
-        }
-        
-        # 添加情绪参数（curiosity, stability, positivity）
-        if emotion_config:
-            generation_config.update(emotion_config)
-            logger.info(f"Added emotion parameters: {emotion_config}")
-        
-        tts_args = {
-            "model_id": MODEL_ID,
-            "transcript": speech_text,
-            "voice": {
-                "mode": "id", 
-                "id": VOICE_ID,
-                "__experimental_controls": {
-                    "stability": 0.7,
-                    "similarity_boost": 0.8
-                }
-            },
-            "output_format": {
-                "container": "mp3",  # 使用 MP3 格式以優化流式傳輸速度
-                "sample_rate": 44100,
-                "bit_rate": 128000,  # 128kbps 平衡質量和速度
-            },
-            "language": "zh",
-            "generation_config": generation_config
-        }
-        
-        # 如果有情緒標籤（<emotion>），加入 generation_config（优先级最高）
-        if cartesia_emotion:
-            tts_args["generation_config"]["emotion"] = cartesia_emotion
-            logger.info(f"Added explicit emotion tag: {cartesia_emotion}")
+            current_config["stability"] = max(0.1, current_config["stability"] - 0.1)
+            current_config["style"] = min(1.0, current_config["style"] + 0.15)
+            logger.info(f"Adjusted ElevenLabs params due to emotional brackets: {current_config}")
 
-        # 流式傳輸優化：直接返回音訊流，無需等待完整生成
-        # 這樣可以讓聲音的出現與文字生成的節奏同步，打造最絲滑的「即時對話感」
+        # 流式传输优化：直接返回音讯流
         try:
-            audio_stream = client.tts.bytes(**tts_args)
+            audio_stream = client.text_to_speech.convert(
+                voice_id=VOICE_ID,
+                optimize_streaming_latency="2",
+                output_format="mp3_44100_128",
+                text=speech_text,
+                model_id=MODEL_ID,
+                voice_settings=current_config
+            )
         except Exception as tts_error:
             error_msg = str(tts_error)
-            logger.error(f"Cartesia TTS API call failed: {error_msg}")
+            logger.error(f"ElevenLabs TTS API call failed: {error_msg}")
             if "401" in error_msg or "unauthorized" in error_msg.lower():
                 raise HTTPException(
                     status_code=401,
-                    detail=f"Cartesia TTS API 认证失败（401）：API Key 无效或已过期。请检查 .env 文件中的 CARTESIA_API_KEY。错误: {error_msg}"
+                    detail=f"ElevenLabs API 认证失败（401）：API Key 无效或已过期。错误: {error_msg}"
                 )
             elif "429" in error_msg or "quota" in error_msg.lower() or "rate limit" in error_msg.lower():
                 raise HTTPException(
                     status_code=429,
-                    detail="Cartesia API 请求过于频繁（429）：已达到速率限制。请稍后再试或检查配额设置。"
+                    detail="ElevenLabs API 请求过于频繁（429）：已达到速率限制。请稍后再试或检查配额设置。"
                 )
             else:
-                raise HTTPException(status_code=500, detail=f"Cartesia TTS 调用失败: {error_msg}")
+                raise HTTPException(status_code=500, detail=f"ElevenLabs TTS 调用失败: {error_msg}")
         
         import base64
         
