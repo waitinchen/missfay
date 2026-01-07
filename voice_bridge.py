@@ -88,7 +88,24 @@ def force_recovery_deps():
         except Exception as e:
             logger.error(f"❌ Emergency OS-level Install Failed: {e}")
             # 最後一招：嘗試系統層級直接安裝 (無視 target)
-            os.system(f"{sys.executable} -m pip install --break-system-packages google-generativeai grpcio")
+            os.system(f"{sys.executable} -m pip install --break-system-packages google-generativeai grpcio elevenlabs")
+
+    # 3. 嘗試導入 ElevenLabs
+    try:
+        import elevenlabs
+        logger.info("✅ elevenlabs is now reachable.")
+    except ImportError:
+        logger.warning("⚠️ elevenlabs missing or broken. Attempting install...")
+        try:
+             # 強制安裝 elevenlabs 及其核心依賴
+            install_cmd = [sys.executable, "-m", "pip", "install", "--break-system-packages", "--target", patch_dir, "elevenlabs", "typing_extensions", "httpx"]
+            subprocess.check_call(install_cmd)
+            import importlib
+            importlib.invalidate_caches()
+            import elevenlabs
+            logger.info("✅ ElevenLabs installed successfully.")
+        except Exception as e:
+            logger.error(f"❌ ElevenLabs install failed: {e}")
 
 # 執行修復 (如果環境缺少依賴則自動補全)
 force_recovery_deps()
