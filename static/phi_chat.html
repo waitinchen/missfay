@@ -638,7 +638,7 @@
 
                     // 显示实时错误状态
                     if (response.status === 401) {
-                        showRealtimeStatus('❌ 认证失败 (401): 请检查 CARTESIA_API_KEY', 'error');
+                        showRealtimeStatus('❌ 认证失败 (401): 请检查 ELEVENLABS_API_KEY', 'error');
                         errorDetail = '认证失败：请检查 API Key 是否有效';
                     } else if (response.status === 429) {
                         // 429 错误：直接显示友好消息，不解析响应（避免乱码）
@@ -883,12 +883,12 @@
                         llmStatusEl.className = 'health-status error';
                     }
 
-                    // 检查 TTS (Cartesia)
-                    if (data.cartesia_status === 'ready') {
+                    // 检查 TTS (ElevenLabs)
+                    if (data.tts_status === 'ready') {
                         ttsStatusEl.textContent = 'OK';
                         ttsStatusEl.className = 'health-status ok';
-                    } else if (data.cartesia_status === 'unauthorized') {
-                        ttsStatusEl.textContent = '401';
+                    } else if (data.tts_status === 'import_error') {
+                        ttsStatusEl.textContent = 'NO LIB'; // library missing
                         ttsStatusEl.className = 'health-status error';
                     } else {
                         ttsStatusEl.textContent = 'ERROR';

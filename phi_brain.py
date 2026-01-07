@@ -811,14 +811,14 @@ class PhiBrain:
                 self.sessions[session_id] = session_history
             # ------------------
             
-            # 添加 GPT-SoVITS 标签
-            if include_tags:
-                reply_text = self._generate_sovits_tags(reply_text)
+
             
             metadata = {
                 "arousal_level": self.arousal_level.value,
                 "personality": self.personality.value,
-                "sovits_tags": self.sovits_tags[self.arousal_level],
+                "personality": self.personality.value,
+                "sovits_tags": {}, # Deprecated for ElevenLabs
+                "model_used": self.model, # 新增使用的模型信息
                 "model_used": self.model, # 新增使用的模型信息
                 "original_text": reply_text if not include_tags else None
             }

@@ -1,6 +1,6 @@
 """
-Voice Bridge - Cartesia API 桥接器 (集成 PhiBrain)
-实现文字流到 Cartesia 高速语音的无缝转换，内置 PhiBrain 逻辑
+Voice Bridge - ElevenLabs API 桥接器 (集成 PhiBrain)
+实现文字流到 ElevenLabs 高质量语音的无缝转换，内置 PhiBrain 逻辑
 """
 
 import os
@@ -140,15 +140,13 @@ else:
     logger.info("No .env file found, using system environment variables (Railway/production mode)")
     load_dotenv(override=False)  # 不覆盖已存在的环境变量
 
-# 调试输出：确认 CARTESIA_API_KEY 是否正确加载
-_cartesia_key = os.getenv("CARTESIA_API_KEY")
-if _cartesia_key:
-    _key_preview = _cartesia_key[:10] + "..." + _cartesia_key[-5:] if len(_cartesia_key) > 15 else _cartesia_key
-    logger.info(f"DEBUG: Cartesia Key loaded: {_key_preview} (length: {len(_cartesia_key)})")
-    print(f"DEBUG: Cartesia Key starts with: {_cartesia_key[:5] if len(_cartesia_key) >= 5 else 'INVALID'}")
+# 调试输出：确认 ELEVENLABS_API_KEY 是否正确加载
+_eleven_key = os.getenv("ELEVENLABS_API_KEY")
+if _eleven_key:
+    _key_preview = _eleven_key[:10] + "..." + _eleven_key[-5:] if len(_eleven_key) > 15 else _eleven_key
+    logger.info(f"DEBUG: ElevenLabs Key loaded: {_key_preview} (length: {len(_eleven_key)})")
 else:
-    logger.error("CRITICAL: CARTESIA_API_KEY not found in environment variables!")
-    print("DEBUG: Cartesia Key starts with: NOT_FOUND")
+    logger.error("CRITICAL: ELEVENLABS_API_KEY not found in environment variables!")
 
 # 已迁移至 Gemini，不再需要 OPENROUTER_API_KEY
 if not os.getenv("GEMINI_API_KEY"):
@@ -159,7 +157,7 @@ from phi_brain import PhiBrain, PersonalityMode, ArousalLevel
 # 初始化 FastAPI
 app = FastAPI(
     title="Phi Voice Bridge (Integrated)",
-    description="Cartesia + PhiBrain 统一桥接器",
+    description="ElevenLabs + PhiBrain 统一桥接器",
     version="2.1.0"
 )
 
@@ -173,16 +171,16 @@ app.add_middleware(
 )
 
 # 核心配置
-CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY")
-VOICE_ID = os.getenv("CARTESIA_VOICE_ID", "a5a8b420-9360-4145-9c1e-db4ede8e4b15")  # 优先使用环境变量
-MODEL_ID = "sonic-multilingual"
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "n41RXbR5qDhB6k5M6gyU")  # 默认使用用户提供的 Phi 音色
+MODEL_ID = "eleven_multilingual_v2" # 支持多语言的 V2 模型
 
-# 验证 CARTESIA_API_KEY
-if not CARTESIA_API_KEY:
-    logger.error("CRITICAL: CARTESIA_API_KEY is missing! TTS will fail with 401 error.")
-    raise ValueError("CARTESIA_API_KEY is required. Please check your .env file.")
+# 验证 ELEVENLABS_API_KEY
+if not ELEVENLABS_API_KEY:
+    logger.error("CRITICAL: ELEVENLABS_API_KEY is missing! TTS will fail.")
+    raise ValueError("ELEVENLABS_API_KEY is required. Please check your .env file.")
 else:
-    logger.info(f"Cartesia API Key loaded successfully (length: {len(CARTESIA_API_KEY)})")
+    logger.info(f"ElevenLabs API Key loaded successfully (length: {len(ELEVENLABS_API_KEY)})")
 
 # 初始化大脑 (PhiBrain)
 brain = None
@@ -252,25 +250,20 @@ async def health_check():
     """健康检查端点 - 包含 LLM 和 TTS 状态"""
     brain_status = "ready" if brain is not None else "not_ready"
     
-    # 检查 Cartesia API Key
-    cartesia_status = "ready" if CARTESIA_API_KEY else "not_ready"
+    # 检查 ElevenLabs API Key
+    eleven_status = "ready" if ELEVENLABS_API_KEY else "not_ready"
     
-    # 如果 Key 存在，尝试初始化客户端（不实际调用 API）
-    if CARTESIA_API_KEY:
+    # 简单的客户端初始化检查
+    if ELEVENLABS_API_KEY:
         try:
-            from cartesia import Cartesia
-            # 只检查客户端能否初始化，不实际调用 API
-            test_client = Cartesia(api_key=CARTESIA_API_KEY)
-            cartesia_status = "ready"
+            from elevenlabs.client import ElevenLabs
+            # 初始化客户端（不调用 API）
+            test_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+            eleven_status = "ready"
         except ImportError:
-            # cartesia 包未安装，但 API Key 存在，标记为 ready（运行时再处理）
-            cartesia_status = "ready"
+            eleven_status = "import_error"
         except Exception as e:
-            error_str = str(e)
-            if "401" in error_str or "unauthorized" in error_str.lower():
-                cartesia_status = "unauthorized"
-            else:
-                cartesia_status = "error"
+            eleven_status = "error"
     
     # 检查 GEMINI_API_KEY 诊断信息
     gemini_key = os.getenv("GEMINI_API_KEY")
@@ -289,8 +282,8 @@ async def health_check():
         "status": "ok",
         "brain_ready": brain is not None,
         "brain_status": brain_status,
-        "cartesia_status": cartesia_status,
-        "engine": "cartesia",
+        "tts_status": eleven_status,
+        "engine": "elevenlabs",
         "timestamp": datetime.now().isoformat(),
         "diagnostics": diagnostics if diagnostics else None
     }
@@ -312,9 +305,15 @@ async def verify_keys():
             "exists": False,
             "valid": False,
             "length": 0,
+            "error": "Deprecated"
+        },
+        "ELEVENLABS_API_KEY": {
+            "exists": False,
+            "valid": False,
+            "length": 0,
             "error": None
         },
-        "CARTESIA_VOICE_ID": {
+        "ELEVENLABS_VOICE_ID": {
             "exists": False,
             "valid": False,
             "value": None,
@@ -351,40 +350,22 @@ async def verify_keys():
     else:
         verification_results["GEMINI_API_KEY"]["error"] = "未设置"
     
-    # 2. 检查 CARTESIA_API_KEY
-    if CARTESIA_API_KEY:
-        verification_results["CARTESIA_API_KEY"]["exists"] = True
-        verification_results["CARTESIA_API_KEY"]["length"] = len(CARTESIA_API_KEY)
-        try:
-            from cartesia import Cartesia
-            test_client = Cartesia(api_key=CARTESIA_API_KEY)
-            verification_results["CARTESIA_API_KEY"]["valid"] = True
-        except ImportError:
-            verification_results["CARTESIA_API_KEY"]["valid"] = True
-        except Exception as e:
-            error_str = str(e)
-            if "401" in error_str or "unauthorized" in error_str.lower():
-                verification_results["CARTESIA_API_KEY"]["valid"] = False
-                verification_results["CARTESIA_API_KEY"]["error"] = "401 Unauthorized"
-            else:
-                verification_results["CARTESIA_API_KEY"]["valid"] = False
-                verification_results["CARTESIA_API_KEY"]["error"] = str(e)
+    # 3. 检查 ELEVENLABS_API_KEY (原 Cartesia 逻辑替换)
+    if ELEVENLABS_API_KEY:
+        verification_results["ELEVENLABS_API_KEY"]["exists"] = True
+        verification_results["ELEVENLABS_API_KEY"]["length"] = len(ELEVENLABS_API_KEY)
+        verification_results["ELEVENLABS_API_KEY"]["valid"] = True # assume valid if exists for now
     else:
-        verification_results["CARTESIA_API_KEY"]["error"] = "未设置"
+        verification_results["ELEVENLABS_API_KEY"]["error"] = "未设置"
     
-    # 3. 检查 CARTESIA_VOICE_ID
-    voice_id = os.getenv("CARTESIA_VOICE_ID", VOICE_ID)
+    # 4. 检查 ELEVENLABS_VOICE_ID
+    voice_id = os.getenv("ELEVENLABS_VOICE_ID", VOICE_ID)
     if voice_id:
-        verification_results["CARTESIA_VOICE_ID"]["exists"] = True
-        verification_results["CARTESIA_VOICE_ID"]["value"] = voice_id
-        uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-        if re.match(uuid_pattern, voice_id, re.IGNORECASE):
-            verification_results["CARTESIA_VOICE_ID"]["valid"] = True
-        else:
-            verification_results["CARTESIA_VOICE_ID"]["valid"] = False
-            verification_results["CARTESIA_VOICE_ID"]["error"] = "格式无效"
+        verification_results["ELEVENLABS_VOICE_ID"]["exists"] = True
+        verification_results["ELEVENLABS_VOICE_ID"]["value"] = voice_id
+        verification_results["ELEVENLABS_VOICE_ID"]["valid"] = True
     else:
-        verification_results["CARTESIA_VOICE_ID"]["error"] = "未设置"
+        verification_results["ELEVENLABS_VOICE_ID"]["error"] = "未设置"
     
     # 4. 检查 GEMINI_MODEL
     gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
@@ -636,15 +617,12 @@ def _pre_process_tags(text: str) -> str:
     impossibilities = ["幹小豆豆", "插小豆豆", "捅小豆豆", "幹陰核", "插陰核", "捅陰核"]
     for err in impossibilities:
         if err in text:
-            # 修正為符合物理邏輯的強烈描述
             fix = err.replace("幹", "瘋狂舔弄").replace("插", "高速撥弄").replace("捅", "用力吮吸")
             text = text.replace(err, fix)
             logger.info(f"Physiological Correction Applied: {err} -> {fix}")
     
-    # 2. 自動補全情緒標籤 (如果有特定強烈詞彙但沒標籤時)
-    if any(word in text for word in ["嫩穴", "小穴", "插進去", "撞擊"]) and "<emotion" not in text:
-        text = '<emotion value="excitement:high" />' + text
-        logger.info("Automatically added high excitement emotion tag based on keywords.")
+    # 2. 自動補全情緒標籤 - ElevenLabs 更依賴語義，但我們仍可以補全以供參考
+    # (如果未來需要，可以在這裡加入提示詞修改)
         
     return text
 
@@ -680,108 +658,48 @@ async def phi_voice_proxy(request: PhiVoiceRequest):
         # 5. 語音化清理（返回文本和从括号提取的情绪参数）
         speech_text, emotion_from_brackets = _clean_for_speech(processed_text)
 
-        # 6. 獲取興奮度參數 (Prosody)
-        sovits_params = brain.sovits_tags.get(brain.arousal_level, brain.sovits_tags[ArousalLevel.NORMAL])
+        # 6. 获興奮度並映射到 ElevenLabs 參數
+        # ElevenLabs 不支持 [STATE], [speed] 等標籤，我們通過 stability/similarity_boost 控制
         
-        # 🎭 动态语速控制：PEAK 状态时降低语速，模拟欲言又止、气喘吁吁的感觉
-        if brain.arousal_level == ArousalLevel.PEAK:
-            # PEAK 状态：语速降低到 0.9，模拟气喘吁吁
-            target_speed = 0.9
-            logger.info(f"PEAK state detected: Speed reduced to 0.9 for breathless effect")
-        else:
-            # 其他状态：使用原有逻辑
-            target_speed = sovits_params.get("speed", 1.0)
+        # 參數映射邏輯：
+        # - Stability: 越低越不穩定，情緒越激動 (Range 0.0 - 1.0)
+        # - Similarity: 越高越像原聲，越低可能有更多變化 (Range 0.0 - 1.0)
+        # - Style: 誇張程度 (Range 0.0 - 1.0)
         
-        target_pitch = sovits_params.get("pitch", 1.0)
-        
-        # 7. 調用 Cartesia API (二進位串流模式，使用完整文本)
-        from cartesia import Cartesia
-        
-        # 验证 API Key
-        if not CARTESIA_API_KEY:
-            raise HTTPException(status_code=500, detail="CARTESIA_API_KEY is missing. Please check .env file.")
-        
-        logger.info(f"Initializing Cartesia client with key: {CARTESIA_API_KEY[:10]}...")
-        client = Cartesia(api_key=CARTESIA_API_KEY)
-        
-        # 🎭 动态语速控制：PEAK 状态时降低语速，模拟欲言又止、气喘吁吁的感觉
-        if brain.arousal_level == ArousalLevel.PEAK:
-            # PEAK 状态：语速降低到 0.9，模拟气喘吁吁
-            target_speed = 0.9
-            logger.info(f"PEAK state detected: Speed reduced to 0.9 for breathless effect")
-        else:
-            # 其他状态：使用原有逻辑
-            target_speed = sovits_params.get("speed", 1.0)
-        
-        target_pitch = sovits_params.get("pitch", 1.0)
-        
-        # 🎭 情绪参数调整：根据 arousal_level 设置基础情绪参数
-        base_emotion_config = {
-            ArousalLevel.CALM: {"curiosity": "low", "stability": "high"},
-            ArousalLevel.NORMAL: {"curiosity": "medium", "stability": "medium"},
-            ArousalLevel.EXCITED: {"curiosity": "high", "stability": "medium"},
-            ArousalLevel.INTENSE: {"curiosity": "high", "stability": "low"},
-            ArousalLevel.PEAK: {"curiosity": "high", "stability": "low", "positivity": "high"}
+        eleven_params = {
+            ArousalLevel.CALM: {"stability": 0.8, "similarity_boost": 0.75, "style": 0.0},
+            ArousalLevel.NORMAL: {"stability": 0.5, "similarity_boost": 0.75, "style": 0.0},
+            ArousalLevel.EXCITED: {"stability": 0.4, "similarity_boost": 0.6, "style": 0.3},
+            ArousalLevel.INTENSE: {"stability": 0.3, "similarity_boost": 0.5, "style": 0.6},
+            ArousalLevel.PEAK: {"stability": 0.25, "similarity_boost": 0.4, "style": 0.8} # 極度激動
         }
         
-        # 合并括号中提取的情绪参数（优先级更高）
-        emotion_config = base_emotion_config.get(brain.arousal_level, {}).copy()
+        current_config = eleven_params.get(brain.arousal_level, eleven_params[ArousalLevel.NORMAL])
+        
+        # 如果括號內有明確情緒，進一步微調 (簡單邏輯：如果有情緒提取，增加 style，降低 stability)
         if emotion_from_brackets:
-            emotion_config.update(emotion_from_brackets)
-            logger.info(f"Emotion config merged from brackets: {emotion_config}")
-        
-        generation_config = {
-            "speed": target_speed,
-            "pitch": target_pitch,
-            "repetition_penalty": 1.15
-        }
-        
-        # 添加情绪参数
-        if emotion_config:
-            generation_config.update(emotion_config)
-            logger.info(f"Added emotion parameters: {emotion_config}")
-        
-        tts_args = {
-            "model_id": MODEL_ID,
-            "transcript": speech_text,
-            "voice": {
-                "mode": "id", 
-                "id": VOICE_ID,
-                "__experimental_controls": {
-                    "stability": 0.7,
-                    "similarity_boost": 0.8
-                }
-            },
-            "output_format": {
-                "container": "raw", # 我們直接拿原始數據
-                "sample_rate": 44100,
-                "encoding": "pcm_s16le",
-            },
-            "language": "zh",
-            "generation_config": generation_config
-        }
-        
-        if cartesia_emotion:
-            tts_args["generation_config"]["emotion"] = cartesia_emotion
-            logger.info(f"Added explicit emotion tag: {cartesia_emotion}")
+            current_config["stability"] = max(0.1, current_config["stability"] - 0.1)
+            current_config["style"] = min(1.0, current_config["style"] + 0.2)
+            logger.info(f"Adjusted ElevenLabs params due to emotional brackets: {current_config}")
 
-        # 獲取音訊疊加
-        audio_iter = client.tts.bytes(**tts_args)
+        # 7. 調用 ElevenLabs API
+        from elevenlabs.client import ElevenLabs
         
-        # 因為 Cartesia 回傳的是 PCM 原始數據，如果需要直接當 mpeg 播放（如用戶要求 audio/mpeg），
-        # 嚴格來說需要轉碼或封裝。但如果用戶接受 StreamingResponse 且前端能處理，
-        # 我們通常會封裝成 WAV 容器，或者直接回傳數據。
-        # 考慮到對接規格要求 "audio/mpeg"，這裡如果沒有 ffmpeg 轉碼，我們先回傳 wav 容器數據。
+        if not ELEVENLABS_API_KEY:
+             raise HTTPException(status_code=500, detail="ELEVENLABS_API_KEY is missing!")
+             
+        client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
         
-        # 修正：Cartesia 支持直接輸出 wav 或 mp3
-        tts_args["output_format"] = {
-            "container": "mp3",
-            "sample_rate": 44100,
-            "bit_rate": 128000
-        }
+        logger.info(f"Generating ElevenLabs audio. Text: {speech_text[:20]}... | Params: {current_config}")
         
-        # 重新獲取疊加
-        audio_stream = client.tts.bytes(**tts_args)
+        audio_stream = client.text_to_speech.convert(
+            voice_id=VOICE_ID,
+            optimize_streaming_latency="2", # 1-4, 4 is max latency but best quality. 2 is balanced.
+            output_format="mp3_44100_128",
+            text=speech_text,
+            model_id=MODEL_ID,
+            voice_settings=current_config
+        )
 
         return StreamingResponse(audio_stream, media_type="audio/mpeg")
 
@@ -1098,37 +1016,42 @@ async def missav_bridge(
         if emotion_config:
             generation_config.update(emotion_config)
             
-        tts_args = {
-            "model_id": MODEL_ID,
-            "transcript": speech_text,
-            "voice": {
-                "mode": "id", 
-                "id": VOICE_ID,
-                "__experimental_controls": {
-                    "stability": 0.7,
-                    "similarity_boost": 0.8
-                }
-            },
-            "output_format": {
-                "container": "mp3",
-                "sample_rate": 44100,
-                "bit_rate": 128000
-            },
-            "language": "zh",
-            "generation_config": generation_config
+
+        # 5. 構建 ElevenLabs 參數
+        eleven_params = {
+            ArousalLevel.CALM: {"stability": 0.85, "similarity_boost": 0.8, "style": 0.0},
+            ArousalLevel.NORMAL: {"stability": 0.7, "similarity_boost": 0.8, "style": 0.0},
+            ArousalLevel.EXCITED: {"stability": 0.5, "similarity_boost": 0.7, "style": 0.25},
+            ArousalLevel.INTENSE: {"stability": 0.4, "similarity_boost": 0.6, "style": 0.5},
+            ArousalLevel.PEAK: {"stability": 0.3, "similarity_boost": 0.5, "style": 0.8}
         }
         
-        if cartesia_emotion:
-            tts_args["generation_config"]["emotion"] = cartesia_emotion
-
+        current_config = eleven_params.get(brain.arousal_level, eleven_params[ArousalLevel.NORMAL])
+        
+        # 簡單的情緒微調
+        if emotion_from_brackets:
+            current_config["stability"] = max(0.1, current_config["stability"] - 0.1)
+            current_config["style"] = min(1.0, current_config["style"] + 0.15)
+            
         # 6. 生成語音並寫入文件 (使用 threadpool)
-        def _generate_audio(args):
-            from cartesia import Cartesia
-            client = Cartesia(api_key=CARTESIA_API_KEY)
-            audio_stream = client.tts.bytes(**args)
-            return b"".join(audio_stream)
+        def _generate_audio(text, settings):
+            from elevenlabs.client import ElevenLabs
+            if not ELEVENLABS_API_KEY:
+                raise ValueError("ELEVENLABS_API_KEY is missing")
+                
+            client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
+            
+            # 使用 convert 生成完整音頻
+            audio_generator = client.text_to_speech.convert(
+                voice_id=VOICE_ID,
+                output_format="mp3_44100_128",
+                text=text,
+                model_id=MODEL_ID,
+                voice_settings=settings
+            )
+            return b"".join(audio_generator)
 
-        audio_data = await run_in_threadpool(_generate_audio, tts_args)
+        audio_data = await run_in_threadpool(_generate_audio, speech_text, current_config)
         
         # 使用 UUID 命名並存儲
         filename = f"phi_{uuid.uuid4().hex}.mp3"
