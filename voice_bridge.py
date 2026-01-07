@@ -90,10 +90,10 @@ def force_recovery_deps():
             # 最後一招：嘗試系統層級直接安裝 (無視 target)
             os.system(f"{sys.executable} -m pip install --break-system-packages google-generativeai grpcio elevenlabs")
 
-    # 3. 嘗試導入 ElevenLabs
+    # 3. 嘗試導入 ElevenLabs (完整性檢查)
     try:
-        import elevenlabs
-        logger.info("✅ elevenlabs is now reachable.")
+        from elevenlabs.client import ElevenLabs
+        logger.info("✅ elevenlabs.client is reachable.")
     except ImportError:
         logger.warning("⚠️ elevenlabs missing or broken. Attempting install...")
         try:
@@ -110,8 +110,11 @@ def force_recovery_deps():
 # 執行修復 (如果環境缺少依賴則自動補全)
 force_recovery_deps()
 
-# 确保当前目录在路径中
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# 确保当前目录在路径中（必須在 deps 之前，否則會找不到 phi_brain）
+_project_root = os.path.dirname(os.path.abspath(__file__))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+    logger.info(f"Added project root to sys.path: {_project_root}")
 
 logger = logging.getLogger(__name__)
 
@@ -266,6 +269,7 @@ async def get_api_docs():
 async def health_check():
     """健康检查端点 - 包含 LLM 和 TTS 状态"""
     brain_status = "ready" if brain is not None else "not_ready"
+    tts_error = None
     
     # 检查 ElevenLabs API Key
     eleven_status = "ready" if ELEVENLABS_API_KEY else "not_ready"
@@ -277,10 +281,14 @@ async def health_check():
             # 初始化客户端（不调用 API）
             test_client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
             eleven_status = "ready"
-        except ImportError:
+        except ImportError as e:
             eleven_status = "import_error"
+            tts_error = str(e)
+            logger.error(f"TTS Import Failed: {e}")
         except Exception as e:
             eleven_status = "error"
+            tts_error = str(e)
+            logger.error(f"TTS Health Check Failed: {e}")
     
     # 检查 GEMINI_API_KEY 诊断信息
     gemini_key = os.getenv("GEMINI_API_KEY")
@@ -302,7 +310,8 @@ async def health_check():
         "tts_status": eleven_status,
         "engine": "elevenlabs",
         "timestamp": datetime.now().isoformat(),
-        "diagnostics": diagnostics if diagnostics else None
+        "diagnostics": diagnostics if diagnostics else None,
+        "tts_error_detail": str(tts_error) if tts_error else None 
     }
 
 @app.get("/verify-keys")
