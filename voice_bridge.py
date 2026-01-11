@@ -528,17 +528,16 @@ def _clean_for_speech(text: str) -> tuple[str, dict]:
     # 但為了防止洩漏，我們乾脆先移除所有尖括號內容，保留對話
     # 注意：<emotion> 標籤我們會在 /chat 邏輯中單獨提取，這裡主要是清理剩餘雜訊
     
-    # 3. 動作標籤白名單化與空格隔離
+    # 3. 移除所有語音標籤（ElevenLabs 不支持 Cartesia 標籤，會直接讀出英文單詞）
+    # 白名單標籤列表（僅供參考，實際會被移除）
     whitelist_tags = [
         "laughter", "sigh", "chuckle", "gasp", "uh-huh", "hmm",
         "wink", "giggle", "moan", "squeal"
     ]
     
-    # 保護並確保間隔
-    for i, tag in enumerate(whitelist_tags):
-        # 使用純數字與符號佔位符，避免被 English Purge (a-zA-z) 誤殺
-        # 例如：[laughter] -> ㊙️7㊙️
-        text = text.replace(f"[{tag}]", f" ㊙️{i}㊙️ ")
+    # 直接移除所有 Cartesia 語音標籤（ElevenLabs 不支持）
+    for tag in whitelist_tags:
+        text = re.sub(rf'\[{re.escape(tag)}\]', ' ', text, flags=re.IGNORECASE)
 
     # 4. 移除所有括號內容 (包含內部可能的亂碼) - 不再直接讀出來，而是轉化為情緒參數
     # 使用循環處理嵌套括號，確保徹底清除
@@ -548,18 +547,14 @@ def _clean_for_speech(text: str) -> tuple[str, dict]:
         text = re.sub(r'\(.*?\)|（.*?）|\[.*?\]|【.*?】|\{.*?\}', ' ', text)
     
     # 5. 強制英語淨化 (Fail-safe)：移除所有剩餘的英文字母
-    # 這裡會拔掉所有殘留的 English，但不會動到我們的 ㊙️i㊙️
+    # ElevenLabs 不支持英文標籤，必須完全移除
     text = re.sub(r'[a-zA-Z]+', '', text)
     
-    # 6. 還原白名單標籤，並確保前後有空格（這是 Cartesia 穩定的關鍵）
-    for i, tag in enumerate(whitelist_tags):
-        text = text.replace(f" ㊙️{i}㊙️ ", f" [{tag}] ")
-    
-    # 7. 標點符號正規化
+    # 6. 標點符號正規化
     text = re.sub(r'\.{3,}', '...', text)
     text = re.sub(r'(!|\?|。|！|？)\1+', r'\1', text)
     
-    # 8. 最終清理：移除所有尖括號殘留、表情符號 (Emoji) 與多餘空格
+    # 7. 最終清理：移除所有尖括號殘留、表情符號 (Emoji) 與多餘空格
     text = re.sub(r'<[^>]*>', '', text)
     text = re.sub(r'[^\u0000-\uFFFF]', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
@@ -571,8 +566,8 @@ def _clause_buffer(text: str) -> str:
     子句缓冲机制 (Clause Buffering)
     确保文本是完整的句子，避免破碎的字节流导致循环崩溃
     
-    特殊处理：保留 Cartesia 支持的语音标签（[gasp], [moan], [laughter] 等），
-    特别是在 PEAK 状态时，这些标签频繁出现，不应被过滤。
+    注意：此函数会临时保留标签以便句子分割，但标签会在后续的 _clean_for_speech 
+    函数中被移除（因为 ElevenLabs 不支持这些标签）。
     """
     # re 模块已在文件顶部导入，无需重复导入
     
